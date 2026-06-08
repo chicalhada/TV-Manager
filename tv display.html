@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Player TV - Tela Cheia com Vídeo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: black;
+            cursor: none;
+        }
+        
+        .player {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: black;
+        }
+        
+        #imagem {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            background: black;
+        }
+        
+        #video {
+            width: 100%;
+            height: 100%;
+            display: none;
+            object-fit: cover;
+            background: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="player">
+        <img id="imagem" alt="">
+        <video id="video" autoplay muted></video>
+    </div>
+    
+    <script>
+        // ========== LISTA COM IMAGENS + VÍDEO ==========
+        const listaMidias = [
+            { 
+                url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop", 
+                type: "image",
+                nome: "Montanha"
+            },
+            { 
+                url: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920&h=1080&fit=crop", 
+                type: "image",
+                nome: "Natureza"
+            },
+            { 
+                url: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&h=1080&fit=crop", 
+                type: "image",
+                nome: "Paisagem"
+            },
+            { 
+                url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
+                type: "video",
+                nome: "🔥 Fogos de Artifício"
+            },
+            { 
+                url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&h=1080&fit=crop", 
+                type: "image",
+                nome: "Floresta"
+            },
+            { 
+                url: "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4", 
+                type: "video",
+                nome: "🎬 Vídeo Sample"
+            },
+            { 
+                url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1920&h=1080&fit=crop", 
+                type: "image",
+                nome: "Montanha Nevada"
+            }
+        ];
+        
+        let indiceAtual = 0;
+        
+        const imagem = document.getElementById('imagem');
+        const video = document.getElementById('video');
+        
+        function mostrarMidia(index) {
+            // Para o vídeo se estiver tocando
+            video.pause();
+            video.currentTime = 0;
+            video.style.display = 'none';
+            imagem.style.display = 'none';
+            
+            const midia = listaMidias[index];
+            
+            if (midia.type === 'image') {
+                // Mostrar imagem
+                imagem.style.display = 'block';
+                video.style.display = 'none';
+                imagem.src = midia.url;
+                
+                console.log('📸 Mostrando imagem:', midia.nome);
+                
+            } else if (midia.type === 'video') {
+                // Mostrar vídeo
+                imagem.style.display = 'none';
+                video.style.display = 'block';
+                video.src = midia.url;
+                
+                console.log('🎬 Tocando vídeo:', midia.nome);
+                
+                // Tenta tocar o vídeo
+                const playPromise = video.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('⚠️ Precisa clicar na tela para ativar o vídeo');
+                        // Se não tocar automaticamente, ativa no primeiro clique
+                        document.body.addEventListener('click', function ativarVideo() {
+                            video.play();
+                            document.body.removeEventListener('click', ativarVideo);
+                        }, { once: true });
+                    });
+                }
+            }
+        }
+        
+        function proximaMidia() {
+            indiceAtual++;
+            if (indiceAtual >= listaMidias.length) {
+                indiceAtual = 0;
+            }
+            mostrarMidia(indiceAtual);
+        }
+        
+        function anteriorMidia() {
+            indiceAtual--;
+            if (indiceAtual < 0) {
+                indiceAtual = listaMidias.length - 1;
+            }
+            mostrarMidia(indiceAtual);
+        }
+        
+        // ========== CONTROLE POR TECLADO ==========
+        document.addEventListener('keydown', function(evento) {
+            switch(evento.key) {
+                case 'ArrowRight': // Seta direita
+                case 'ArrowDown':  // Seta baixo
+                case ' ':          // Espaço
+                case 'Enter':      // Enter
+                    evento.preventDefault();
+                    proximaMidia();
+                    break;
+                    
+                case 'ArrowLeft':  // Seta esquerda
+                case 'ArrowUp':    // Seta cima
+                    evento.preventDefault();
+                    anteriorMidia();
+                    break;
+            }
+        });
+        
+        // ========== CONTROLE POR CLICK ==========
+        document.body.addEventListener('click', function(evento) {
+            const larguraTela = window.innerWidth;
+            
+            if (evento.clientX < larguraTela / 2) {
+                // Clicou na metade esquerda = anterior
+                anteriorMidia();
+            } else {
+                // Clicou na metade direita = próximo
+                proximaMidia();
+            }
+        });
+        
+        // ========== ESCONDER CURSOR ==========
+        let tempoCursor;
+        document.addEventListener('mousemove', function() {
+            document.body.style.cursor = 'auto';
+            if (tempoCursor) clearTimeout(tempoCursor);
+            tempoCursor = setTimeout(() => {
+                document.body.style.cursor = 'none';
+            }, 2000);
+        });
+        
+        // ========== INICIAR ==========
+        console.log('Player iniciado!');
+        console.log('Total de mídias:', listaMidias.length);
+        mostrarMidia(0);
+    </script>
+</body>
+</html>
