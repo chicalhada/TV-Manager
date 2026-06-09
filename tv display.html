@@ -2,200 +2,381 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Player TV - Tela Cheia com Vídeo</title>
+    <title>TV Player - Código Permanente</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             width: 100vw;
             height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Arial, sans-serif;
             overflow: hidden;
-            background: black;
-            cursor: none;
         }
-        
+
+        .code-container {
+            text-align: center;
+            background: rgba(255,255,255,0.95);
+            padding: 60px 80px;
+            border-radius: 50px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .titulo {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .codigo {
+            font-size: 120px;
+            font-weight: bold;
+            letter-spacing: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            font-family: monospace;
+            margin: 20px 0;
+        }
+
+        .instrucao {
+            font-size: 18px;
+            color: #666;
+            margin-top: 30px;
+        }
+
+        .tv-id {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .connected {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,255,0,0.8);
+            color: black;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-weight: bold;
+            display: none;
+        }
+
         .player {
             width: 100%;
             height: 100%;
+            display: none;
             position: relative;
             background: black;
         }
-        
-        #imagem {
+
+        #imagem, #video {
             width: 100%;
             height: 100%;
-            display: block;
             object-fit: cover;
-            background: black;
-        }
-        
-        #video {
-            width: 100%;
-            height: 100%;
             display: none;
-            object-fit: cover;
-            background: black;
+        }
+
+        .status {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .reset-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,0,0,0.7);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            display: none;
+        }
+
+        .reset-btn:hover {
+            background: rgba(255,0,0,0.9);
         }
     </style>
 </head>
 <body>
-    <div class="player">
+    <!-- Tela de código -->
+    <div id="codeScreen" class="code-container">
+        <div class="titulo">📺 TV #<span id="tvNumero">1</span></div>
+        <div class="codigo" id="codigoDisplay">----</div>
+        <div class="instrucao">
+            Digite este código no computador<br>
+            para controlar esta TV
+        </div>
+        <div style="margin-top: 20px; font-size: 12px; color: #999;">
+            🔒 Código permanente - Nunca muda!
+        </div>
+    </div>
+
+    <!-- Tela do player -->
+    <div id="playerScreen" class="player">
         <img id="imagem" alt="">
         <video id="video" autoplay muted></video>
     </div>
-    
+
+    <div class="tv-id" id="tvId">📺 TV ID: ----</div>
+    <div class="connected" id="connectedBadge">✅ CONECTADO</div>
+    <div class="status" id="status">🟡 Aguardando conexão...</div>
+    <button class="reset-btn" id="resetBtn" onclick="resetarCodigo()">🔄 Resetar Código</button>
+
     <script>
-        // ========== LISTA COM IMAGENS + VÍDEO ==========
-        const listaMidias = [
-            { 
-                url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop", 
-                type: "image",
-                nome: "Montanha"
-            },
-            { 
-                url: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920&h=1080&fit=crop", 
-                type: "image",
-                nome: "Natureza"
-            },
-            { 
-                url: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1920&h=1080&fit=crop", 
-                type: "image",
-                nome: "Paisagem"
-            },
-            { 
-                url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", 
-                type: "video",
-                nome: "🔥 Fogos de Artifício"
-            },
-            { 
-                url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&h=1080&fit=crop", 
-                type: "image",
-                nome: "Floresta"
-            },
-            { 
-                url: "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4", 
-                type: "video",
-                nome: "🎬 Vídeo Sample"
-            },
-            { 
-                url: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1920&h=1080&fit=crop", 
-                type: "image",
-                nome: "Montanha Nevada"
+        // ========== CÓDIGO PERMANENTE - NUNCA MUDA ==========
+        
+        // Função para gerar um código único baseado no dispositivo
+        function gerarCodigoUnicoPermanente() {
+            // Tenta pegar código salvo no localStorage
+            let codigoSalvo = localStorage.getItem('tv_codigo_permanente');
+            
+            if (codigoSalvo) {
+                console.log('Código encontrado no armazenamento:', codigoSalvo);
+                return codigoSalvo;
             }
+            
+            // Se não existe, criar um código novo e ÚNICO
+            // Baseado no navegador e no tempo de instalação
+            const userAgent = navigator.userAgent;
+            const linguagem = navigator.language;
+            const timestamp = Date.now().toString();
+            
+            // Criar um hash único
+            let hash = 0;
+            const textoUnico = userAgent + linguagem + timestamp;
+            for (let i = 0; i < textoUnico.length; i++) {
+                hash = ((hash << 5) - hash) + textoUnico.charCodeAt(i);
+                hash = hash & hash;
+            }
+            
+            // Gerar número de 4 dígitos (1000 a 9999)
+            let codigo = Math.abs(hash % 9000 + 1000).toString();
+            
+            // Garantir que é único (simples verificação)
+            if (codigo.length < 4) {
+                codigo = '1' + codigo.padStart(3, '0');
+            }
+            
+            // Salvar permanentemente
+            localStorage.setItem('tv_codigo_permanente', codigo);
+            localStorage.setItem('tv_data_criacao', new Date().toISOString());
+            
+            console.log('Novo código gerado e salvo:', codigo);
+            return codigo;
+        }
+        
+        // Função para resetar o código (caso queira mudar)
+        window.resetarCodigo = function() {
+            if (confirm('Tem certeza que quer gerar um NOVO código? O código antigo vai parar de funcionar.')) {
+                localStorage.removeItem('tv_codigo_permanente');
+                localStorage.removeItem('tv_data_criacao');
+                location.reload();
+            }
+        };
+        
+        // Opção: DEFINIR MANUALMENTE (descomente para usar código fixo)
+        // const CODIGO_MANUAL = "1234";  // ← Coloque o código que quiser aqui
+        
+        let codigoTV;
+        
+        // Se tiver código manual definido, usa ele. Senão, usa o permanente
+        if (typeof CODIGO_MANUAL !== 'undefined') {
+            codigoTV = CODIGO_MANUAL;
+            localStorage.setItem('tv_codigo_permanente', codigoTV);
+        } else {
+            codigoTV = gerarCodigoUnicoPermanente();
+        }
+        
+        // Nome da TV (pode personalizar também)
+        let nomeTV = localStorage.getItem('tv_nome');
+        if (!nomeTV) {
+            nomeTV = "TV " + codigoTV;
+            localStorage.setItem('tv_nome', nomeTV);
+        }
+        
+        let conexaoAtiva = false;
+        let listaMidias = [
+            { url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop", type: "image" },
+            { url: "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=1920&h=1080&fit=crop", type: "image" },
+            { url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", type: "video" }
         ];
-        
         let indiceAtual = 0;
+        let intervaloComandos = null;
+
+        // Mostrar código na tela
+        document.getElementById('codigoDisplay').innerText = codigoTV;
+        document.getElementById('tvId').innerHTML = `📺 ${nomeTV} | Código: ${codigoTV} (permanente)`;
+        document.getElementById('tvNumero').innerText = nomeTV;
         
-        const imagem = document.getElementById('imagem');
-        const video = document.getElementById('video');
-        
+        // Mostrar botão reset apenas se estiver em modo de desenvolvimento
+        if (localStorage.getItem('tv_show_reset') === 'true') {
+            document.getElementById('resetBtn').style.display = 'block';
+        }
+
+        // ========== INDEXEDDB LOCAL ==========
+        function abrirDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(`TVPlayer_${codigoTV}`, 1);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('comandos')) {
+                        db.createObjectStore('comandos', { keyPath: 'id' });
+                    }
+                };
+            });
+        }
+
+        async function lerComando(comando) {
+            const db = await abrirDB();
+            const transaction = db.transaction(['comandos'], 'readonly');
+            const store = transaction.objectStore('comandos');
+            return new Promise((resolve, reject) => {
+                const request = store.get(comando);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function limparComando(comando) {
+            const db = await abrirDB();
+            const transaction = db.transaction(['comandos'], 'readwrite');
+            const store = transaction.objectStore('comandos');
+            store.delete(comando);
+        }
+
+        // ========== VERIFICAR COMANDOS ==========
+        async function verificarComandos() {
+            if (!conexaoAtiva) return;
+
+            const acao = await lerComando('acao');
+            if (acao && acao.timestamp > Date.now() - 2000) {
+                executarAcao(acao.valor);
+                await limparComando('acao');
+            }
+            
+            const midias = await lerComando('midias');
+            if (midias && midias.timestamp > Date.now() - 5000) {
+                if (midias.valor && midias.valor.length > 0) {
+                    listaMidias = midias.valor;
+                    mostrarMidia(0);
+                }
+                await limparComando('midias');
+            }
+        }
+
+        function executarAcao(acao) {
+            switch(acao) {
+                case 'next':
+                    proximaMidia();
+                    break;
+                case 'prev':
+                    anteriorMidia();
+                    break;
+                case 'play':
+                    const video = document.getElementById('video');
+                    if (video.style.display !== 'none') video.play();
+                    break;
+                case 'pause':
+                    const videoP = document.getElementById('video');
+                    if (videoP.style.display !== 'none') videoP.pause();
+                    break;
+            }
+        }
+
+        // ========== FUNÇÕES DO PLAYER ==========
         function mostrarMidia(index) {
-            // Para o vídeo se estiver tocando
+            const imagem = document.getElementById('imagem');
+            const video = document.getElementById('video');
+            
             video.pause();
             video.currentTime = 0;
             video.style.display = 'none';
             imagem.style.display = 'none';
             
+            if (!listaMidias[index]) return;
+            
             const midia = listaMidias[index];
             
             if (midia.type === 'image') {
-                // Mostrar imagem
                 imagem.style.display = 'block';
                 video.style.display = 'none';
                 imagem.src = midia.url;
-                
-                console.log('📸 Mostrando imagem:', midia.nome);
-                
             } else if (midia.type === 'video') {
-                // Mostrar vídeo
                 imagem.style.display = 'none';
                 video.style.display = 'block';
                 video.src = midia.url;
-                
-                console.log('🎬 Tocando vídeo:', midia.nome);
-                
-                // Tenta tocar o vídeo
-                const playPromise = video.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        console.log('⚠️ Precisa clicar na tela para ativar o vídeo');
-                        // Se não tocar automaticamente, ativa no primeiro clique
-                        document.body.addEventListener('click', function ativarVideo() {
-                            video.play();
-                            document.body.removeEventListener('click', ativarVideo);
-                        }, { once: true });
-                    });
-                }
+                video.play().catch(e => console.log('Aguardando interação'));
             }
         }
-        
+
         function proximaMidia() {
-            indiceAtual++;
-            if (indiceAtual >= listaMidias.length) {
-                indiceAtual = 0;
-            }
+            if (listaMidias.length === 0) return;
+            indiceAtual = (indiceAtual + 1) % listaMidias.length;
             mostrarMidia(indiceAtual);
         }
-        
+
         function anteriorMidia() {
-            indiceAtual--;
-            if (indiceAtual < 0) {
-                indiceAtual = listaMidias.length - 1;
-            }
+            if (listaMidias.length === 0) return;
+            indiceAtual = (indiceAtual - 1 + listaMidias.length) % listaMidias.length;
             mostrarMidia(indiceAtual);
         }
-        
-        // ========== CONTROLE POR TECLADO ==========
-        document.addEventListener('keydown', function(evento) {
-            switch(evento.key) {
-                case 'ArrowRight': // Seta direita
-                case 'ArrowDown':  // Seta baixo
-                case ' ':          // Espaço
-                case 'Enter':      // Enter
-                    evento.preventDefault();
-                    proximaMidia();
-                    break;
-                    
-                case 'ArrowLeft':  // Seta esquerda
-                case 'ArrowUp':    // Seta cima
-                    evento.preventDefault();
-                    anteriorMidia();
-                    break;
-            }
-        });
-        
-        // ========== CONTROLE POR CLICK ==========
-        document.body.addEventListener('click', function(evento) {
-            const larguraTela = window.innerWidth;
+
+        // ========== CONEXÃO VIA URL ==========
+        function verificarConexaoURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const codigoURL = urlParams.get('conectar');
             
-            if (evento.clientX < larguraTela / 2) {
-                // Clicou na metade esquerda = anterior
-                anteriorMidia();
-            } else {
-                // Clicou na metade direita = próximo
-                proximaMidia();
+            if (codigoURL && codigoURL === codigoTV && !conexaoAtiva) {
+                conexaoAtiva = true;
+                document.getElementById('codeScreen').style.display = 'none';
+                document.getElementById('playerScreen').style.display = 'block';
+                document.getElementById('status').innerHTML = '🟢 Conectado!';
+                document.getElementById('connectedBadge').style.display = 'block';
+                
+                mostrarMidia(0);
+                
+                if (intervaloComandos) clearInterval(intervaloComandos);
+                intervaloComandos = setInterval(verificarComandos, 500);
             }
-        });
-        
-        // ========== ESCONDER CURSOR ==========
-        let tempoCursor;
-        document.addEventListener('mousemove', function() {
-            document.body.style.cursor = 'auto';
-            if (tempoCursor) clearTimeout(tempoCursor);
-            tempoCursor = setTimeout(() => {
-                document.body.style.cursor = 'none';
-            }, 2000);
-        });
-        
-        // ========== INICIAR ==========
-        console.log('Player iniciado!');
-        console.log('Total de mídias:', listaMidias.length);
-        mostrarMidia(0);
+        }
+
+        setInterval(verificarConexaoURL, 1000);
+        verificarConexaoURL();
+
+        console.log(`📺 ${nomeTV}`);
+        console.log(`🔑 Código PERMANENTE: ${codigoTV}`);
+        console.log(`💾 O código NUNCA muda, mesmo após refresh!`);
+        document.getElementById('status').innerHTML = `🟡 Código: ${codigoTV} (permanente)`;
     </script>
 </body>
 </html>
