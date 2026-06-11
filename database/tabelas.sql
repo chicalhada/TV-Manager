@@ -1,0 +1,44 @@
+-- child_sites (televisões)
+CREATE TABLE IF NOT EXISTS child_sites (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    ip TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- media (vídeos e fotos)
+CREATE TABLE IF NOT EXISTS media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    url TEXT NOT NULL,
+    mime_type TEXT,          -- 'image/jpeg', 'video/mp4', etc.
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- playlists
+CREATE TABLE IF NOT EXISTS playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- playlist_items (itens da playlist com ordem)
+CREATE TABLE IF NOT EXISTS playlist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id INTEGER NOT NULL,
+    media_id INTEGER NOT NULL,
+    duration_seconds INTEGER DEFAULT 10,
+    display_order INTEGER NOT NULL,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+    FOREIGN KEY (media_id) REFERENCES media(id)
+);
+
+-- assignments (qual playlist está atribuída a qual TV)
+CREATE TABLE IF NOT EXISTS assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_site_id INTEGER NOT NULL,
+    playlist_id INTEGER NOT NULL,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (child_site_id) REFERENCES child_sites(id),
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id)
+);
