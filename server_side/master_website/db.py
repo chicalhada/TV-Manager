@@ -135,7 +135,7 @@ def get_media(media_id):
     return dict(row) if row else None
 
 # ========== FUNÇÕES CRUD para playlists ==========
-def add_playlist(name):
+def add_playlist_db(name):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO playlists (name) VALUES (?)", (name,))
