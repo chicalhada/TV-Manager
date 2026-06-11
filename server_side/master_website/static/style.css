@@ -128,7 +128,7 @@ body {
     font-style: italic;
 }
 
-.disconnect-btn {
+.clear-btn {
     background: #732c2c;
     border: none;
     color: white;
@@ -140,7 +140,7 @@ body {
     transition: 0.2s;
 }
 
-.disconnect-btn:hover {
+.clear-btn:hover {
     background: #ac3a3a;
 }
 
