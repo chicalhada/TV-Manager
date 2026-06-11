@@ -13,7 +13,9 @@ from db import (
     get_playlist_with_items,
     list_playlists,
     assign_playlist_to_tv,
-    get_current_playlist_for_tv
+    get_current_playlist_for_tv,
+    get_connection,
+    get_media
 )
 
 app = Flask(__name__)
@@ -54,6 +56,11 @@ def add_tv():
     nova_tv = next((tv for tv in tvs if tv["id"] == child_id), None)
     return jsonify(nova_tv), 201
 
+
+
+
+
+################################################################################
 
 
 
@@ -109,7 +116,7 @@ def add_item_to_playlist(playlist_id):
 
 
 
-
+########################################################################################
 
 
 
@@ -149,6 +156,7 @@ def get_media():
     return jsonify(media)
 
 
+################################################################################
 
 
 @app.route("/api/assign", methods=["POST"])
@@ -170,6 +178,83 @@ def get_child_playlist(child_site_id):
     if not playlist:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
     return jsonify(playlist)
+
+
+################################################################################
+
+
+@app.route("/api/tvs/<int:child_id>", methods=["DELETE"])
+def delete_tv(child_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM child_sites WHERE id = ?", (child_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "message": "TV removida com sucesso"}), 200
+
+
+
+@app.route("/api/media/<int:media_id>", methods=["DELETE"])
+def delete_media(media_id):
+    
+    media = get_media(media_id)
+    if not media:
+        return jsonify({"error": "Media não encontrado"}), 404
+    
+    
+    filepath = os.path.join(upload_folder, media["filename"])
+    if os.path.exists(filepath):
+        os.remove(filepath)
+    
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM media WHERE id = ?", (media_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True, "message": "Media removido com sucesso"}), 200
+
+
+
+@app.route("/api/playlists/<int:playlist_id>", methods=["DELETE"])
+def delete_playlist(playlist_id):
+    
+    playlist = get_playlist_with_items(playlist_id)
+    if not playlist:
+        return jsonify({"error": "Playlist não encontrada"}), 404
+    
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True, "message": "Playlist removida com sucesso"}), 200
+
+
+
+@app.route("/api/playlists/<int:playlist_id>/items/<int:item_id>", methods=["DELETE"])
+def delete_playlist_item(playlist_id, item_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    
+    cursor.execute("SELECT * FROM playlist_items WHERE id = ? AND playlist_id = ?", (item_id, playlist_id))
+    item = cursor.fetchone()
+    if not item:
+        conn.close()
+        return jsonify({"error": "Item não encontrado nesta playlist"}), 404
+    
+    
+    cursor.execute("DELETE FROM playlist_items WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    
+    
+    return jsonify({"success": True, "message": "Item removido da playlist"}), 200
+
 
 
 
