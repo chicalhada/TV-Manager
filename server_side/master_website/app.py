@@ -3,6 +3,9 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
 import uuid
+import random
+import string
+from flask import send_from_directory
 from db import (
     add_child_site,
     list_child_sites,
@@ -15,7 +18,8 @@ from db import (
     assign_playlist_to_tv,
     get_current_playlist_for_tv,
     get_connection,
-    get_media
+    get_media,
+    get_child_site_by_codigo   # <-- ADICIONADO
 )
 
 app = Flask(__name__)
@@ -24,19 +28,22 @@ CORS(app)
 upload_folder = 'uploads/'
 os.makedirs(upload_folder, exist_ok=True)
 
+########################################################################################
 
 
 @app.route("/")
 def test():
     return "TV Manager - Admin"
 
-
-
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('static', filename)
 
 @app.route("/api/health")
 def health():
     return jsonify({"status": "ok"})
 
+################################################################################
 
 
 
@@ -44,6 +51,12 @@ def health():
 def get_tvs():
     tvs = list_child_sites()
     return jsonify(tvs)
+
+
+
+@app.route('/tv')
+def tv():
+    return send_from_directory('static', 'tv.html')   # <-- CORRIGIDO
 
 
 
@@ -59,6 +72,20 @@ def add_tv():
 
 
 
+@app.route("/api/tv/register", methods=["POST"])
+def register_tv():
+    data = request.get_json() or {}
+    codigo = data.get("codigo")
+    
+    if not codigo:
+        codigo = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    
+    tv = get_child_site_by_codigo(codigo)
+    if not tv:
+        child_id = add_child_site(f"TV {codigo}", None, codigo)
+        tv = get_child_site_by_codigo(codigo)
+    
+    return jsonify({"success": True, "codigo": tv["codigo"], "child_id": tv["id"]}), 200
 
 ################################################################################
 
@@ -68,7 +95,6 @@ def add_tv():
 def get_playlists():
     playlists = list_playlists()
     return jsonify(playlists)
-
 
 
 
@@ -82,15 +108,12 @@ def add_playlist():
 
 
 
-
 @app.route("/api/playlists/<int:playlist_id>", methods=["GET"])
 def get_playlist(playlist_id):
     playlist = get_playlist_with_items(playlist_id)
     if not playlist:
         return jsonify({"error": "Playlist não encontrada"}), 404
     return jsonify(playlist)
-
-
 
 
 
@@ -114,10 +137,7 @@ def add_item_to_playlist(playlist_id):
     playlist_atualizada = get_playlist_with_items(playlist_id)
     return jsonify(playlist_atualizada), 201
 
-
-
 ########################################################################################
-
 
 
 
@@ -150,37 +170,59 @@ def upload_file():
     return jsonify(resultados), 201
 
 
+
+
 @app.route("/api/media", methods=["GET"])
 def get_media():
     media = list_media()
     return jsonify(media)
 
 
+
+
+
+
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory('uploads', filename)
+
 ################################################################################
+
 
 
 @app.route("/api/assign", methods=["POST"])
 def assign_playlist():
     data = request.get_json()
-    child_site_id = data.get("child_site_id")
+    child_site_codigo = data.get("child_site_codigo")
     playlist_id = data.get("playlist_id")
     
-    if not child_site_id or not playlist_id:
-        return jsonify({"error": "child_site_id e playlist_id são obrigatórios"}), 400
+    if not child_site_codigo or not playlist_id:
+        return jsonify({"error": "child_site_codigo e playlist_id são obrigatórios"}), 400
     
-    assign_playlist_to_tv(child_site_id, playlist_id)
-    return jsonify({"success": True, "child_site_id": child_site_id, "playlist_id": playlist_id}), 200
+    child_site = get_child_site_by_codigo(child_site_codigo)
+    if not child_site:
+        return jsonify({"error": "TV não encontrada"}), 404
+    
+    assign_playlist_to_tv(child_site["id"], playlist_id)
+    return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
 
 
-@app.route("/api/child/<int:child_site_id>/playlist", methods=["GET"])
-def get_child_playlist(child_site_id):
-    playlist = get_current_playlist_for_tv(child_site_id)
+
+
+
+@app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
+def get_child_playlist(child_site_codigo):
+    child_site = get_child_site_by_codigo(child_site_codigo)
+    if not child_site:
+        return jsonify({"error": "TV não encontrada"}), 404
+    playlist = get_current_playlist_for_tv(child_site["id"])
     if not playlist:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
     return jsonify(playlist)
 
-
 ################################################################################
+
+
 
 
 @app.route("/api/tvs/<int:child_id>", methods=["DELETE"])
@@ -194,18 +236,16 @@ def delete_tv(child_id):
 
 
 
+
 @app.route("/api/media/<int:media_id>", methods=["DELETE"])
 def delete_media(media_id):
-    
     media = get_media(media_id)
     if not media:
         return jsonify({"error": "Media não encontrado"}), 404
     
-    
     filepath = os.path.join(upload_folder, media["filename"])
     if os.path.exists(filepath):
         os.remove(filepath)
-    
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -217,13 +257,13 @@ def delete_media(media_id):
 
 
 
+
+
 @app.route("/api/playlists/<int:playlist_id>", methods=["DELETE"])
 def delete_playlist(playlist_id):
-    
     playlist = get_playlist_with_items(playlist_id)
     if not playlist:
         return jsonify({"error": "Playlist não encontrada"}), 404
-    
     
     conn = get_connection()
     cursor = conn.cursor()
@@ -235,11 +275,12 @@ def delete_playlist(playlist_id):
 
 
 
+
+
 @app.route("/api/playlists/<int:playlist_id>/items/<int:item_id>", methods=["DELETE"])
 def delete_playlist_item(playlist_id, item_id):
     conn = get_connection()
     cursor = conn.cursor()
-    
     
     cursor.execute("SELECT * FROM playlist_items WHERE id = ? AND playlist_id = ?", (item_id, playlist_id))
     item = cursor.fetchone()
@@ -247,16 +288,13 @@ def delete_playlist_item(playlist_id, item_id):
         conn.close()
         return jsonify({"error": "Item não encontrado nesta playlist"}), 404
     
-    
     cursor.execute("DELETE FROM playlist_items WHERE id = ?", (item_id,))
     conn.commit()
     conn.close()
     
-    
     return jsonify({"success": True, "message": "Item removido da playlist"}), 200
 
-
-
+###########################################################################################################
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
