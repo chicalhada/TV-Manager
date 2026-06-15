@@ -1,13 +1,25 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TV Cast · Receptor de Midia</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app-container" id="appRoot"></div>
-<script src="script.js"></script>
+    <div class="container">
+        <nav class="menu">
+            <ul>
+                <li class="active" data-view="admin">Admin</li>
+                <li data-view="list">List</li>
+                <li data-view="upload">Upload</li>
+                <li data-view="ficheiros">Ficheiros</li>
+                <li data-view="tvs">TVs</li>
+            </ul>
+        </nav>
+        <main id="main-content">
+        </main>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>
