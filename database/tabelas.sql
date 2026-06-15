@@ -1,3 +1,13 @@
+-- users (administradores/gestores do site)
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    email TEXT UNIQUE,
+    role TEXT DEFAULT 'admin',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- child_sites (televisões)
 CREATE TABLE IF NOT EXISTS child_sites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -12,6 +12,16 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            email TEXT UNIQUE,
+            role TEXT DEFAULT 'admin',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS child_sites (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -60,6 +70,41 @@ def init_db():
     conn.commit()
     conn.close()
     print("✅ Banco de dados inicializado.")
+
+def add_user(username, password_hash, email=None, role='admin'):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO users (username, password_hash, email, role) VALUES (?, ?, ?, ?)",
+        (username, password_hash, email, role)
+    )
+    conn.commit()
+    user_id = cursor.lastrowid
+    conn.close()
+    return user_id
+
+def get_user_by_username(username):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def list_users():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, email, role, created_at FROM users ORDER BY id")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def delete_user(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
 
 def add_child_site(name, ip=None, codigo=None):
     conn = get_connection()
