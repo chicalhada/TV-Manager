@@ -14,6 +14,9 @@ from db import (
     add_playlist_db,
     add_playlist_item,
     get_playlist_with_items,
+    add_playlist,
+    add_playlist_item,
+    get_playlist_items,
     list_playlists,
     assign_playlist_to_tv,
     get_current_playlist_for_tv,
@@ -162,6 +165,7 @@ def uploaded_file(filename):
 
 ################################################################################
 
+
 @app.route("/api/assign", methods=["POST"])
 def assign_playlist():
     data = request.get_json()
@@ -174,9 +178,12 @@ def assign_playlist():
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
-
     assign_playlist_to_tv(child_site["id"], playlist_id)
     return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
+    
+    assign_playlist_to_tv(child_site["id"], playlist_id)
+    return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
+
 
 @app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
 def get_child_playlist(child_site_codigo):
@@ -204,17 +211,13 @@ def delete_tv(child_id):
 
 @app.route("/api/media/<int:media_id>", methods=["DELETE"])
 def delete_media(media_id):
-    
     media = get_media(media_id)
     if not media:
         return jsonify({"error": "Media não encontrado"}), 404
     
-    
     filepath = os.path.join(upload_folder, media["filename"])
     if os.path.exists(filepath):
         os.remove(filepath)
-    
-    
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM media WHERE id = ?", (media_id,))
@@ -232,8 +235,6 @@ def delete_playlist(playlist_id):
     playlist = get_playlist_with_items(playlist_id)
     if not playlist:
         return jsonify({"error": "Playlist não encontrada"}), 404
-    
-
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
@@ -241,11 +242,6 @@ def delete_playlist(playlist_id):
     conn.close()
     
     return jsonify({"success": True, "message": "Playlist removida com sucesso"}), 200
-
-
-
-
-
 
 @app.route("/api/playlists/<int:playlist_id>/items/<int:item_id>", methods=["DELETE"])
 def delete_playlist_item(playlist_id, item_id):
