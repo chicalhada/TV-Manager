@@ -20,6 +20,7 @@ let elementoVideoAtual = null;
 let estaEmFullscreen = false;
 let fullscreenContainer = null;
 let temporizadorMouse = null;
+let aguardandoProximoItem = false;
 
 // ============================================================
 // 3. FUNÇÃO PARA GERAR ID ÚNICO DO DISPOSITIVO
@@ -144,8 +145,29 @@ async function buscarPlaylist() {
 // ============================================================
 
 function entrarFullscreen(elemento) {
-    if (document.fullscreenElement) {
-        sairFullscreen();
+    // Se já estiver em fullscreen, apenas atualiza o conteúdo
+    if (estaEmFullscreen) {
+        const container = document.getElementById('fullscreenContainer');
+        if (container) {
+            // Remove o conteúdo antigo
+            const oldContent = container.querySelector('video, img, .no-media-fullscreen');
+            if (oldContent) oldContent.remove();
+            
+            // Adiciona o novo conteúdo
+            const clone = elemento.cloneNode(true);
+            clone.style.width = '100vw';
+            clone.style.height = '100vh';
+            clone.style.objectFit = 'cover';
+            clone.style.display = 'block';
+            clone.style.background = '#000';
+            clone.style.borderRadius = '0';
+            container.insertBefore(clone, container.firstChild);
+            
+            // Se for vídeo, dar play
+            if (clone.tagName === 'VIDEO') {
+                clone.play().catch(e => console.log("Erro ao dar play:", e));
+            }
+        }
         return;
     }
 
@@ -160,7 +182,7 @@ function entrarFullscreen(elemento) {
     
     clone.style.width = '100vw';
     clone.style.height = '100vh';
-    clone.style.objectFit = 'contain';
+    clone.style.objectFit = 'cover';
     clone.style.display = 'block';
     clone.style.background = '#000';
     clone.style.borderRadius = '0';
@@ -229,6 +251,7 @@ function sairFullscreen() {
     
     estaEmFullscreen = false;
     fullscreenContainer = null;
+    aguardandoProximoItem = false;
     
     if (temporizadorMouse) {
         clearTimeout(temporizadorMouse);
@@ -290,9 +313,9 @@ function proximoItem() {
         clearTimeout(temporizadorAtual);
         temporizadorAtual = null;
     }
-    if (estaEmFullscreen) {
-        sairFullscreen();
-    }
+    
+    aguardandoProximoItem = false;
+    
     if (reprodutorAtivo) {
         if (indiceAtual >= itemsPlaylist.length) {
             indiceAtual = 0;
@@ -332,9 +355,8 @@ function pararReproducao() {
         elementoVideoAtual = null;
     }
     reprodutorAtivo = false;
-    if (estaEmFullscreen) {
-        sairFullscreen();
-    }
+    aguardandoProximoItem = false;
+    // NÃO SAI DO FULLSCREEN AUTOMATICAMENTE
 }
 
 function reproduzirItem(item, onTerminar) {
@@ -361,6 +383,7 @@ function reproduzirItem(item, onTerminar) {
         
         video.onended = () => {
             elementoVideoAtual = null;
+            // NÃO SAI DO FULLSCREEN - apenas chama onTerminar
             onTerminar();
         };
         video.onerror = () => {
@@ -392,12 +415,30 @@ function reproduzirItem(item, onTerminar) {
         const duracao = (item.duration_seconds || 10) * 1000;
         temporizadorAtual = setTimeout(() => {
             temporizadorAtual = null;
+            // NÃO SAI DO FULLSCREEN - apenas chama onTerminar
             onTerminar();
         }, duracao);
     }
     else {
-        viewerContainer.innerHTML = `<div class="no-media">Formato não suportado: ${url}</div>`;
-        setTimeout(() => onTerminar(), 3000);
+        // Para itens sem mídia (formato não suportado)
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'no-media-fullscreen';
+        msgDiv.textContent = `📺 ${item.name || 'Conteúdo indisponível'}`;
+        msgDiv.style.cssText = `
+            color: #fff;
+            font-size: 2rem;
+            text-align: center;
+            padding: 30px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            border: 2px solid #ffb347;
+            max-width: 80%;
+        `;
+        entrarFullscreen(msgDiv);
+        
+        setTimeout(() => {
+            onTerminar();
+        }, 3000);
     }
 }
 
@@ -415,6 +456,7 @@ function iniciarLoop(playlistItems) {
     itemsPlaylist = playlistItems;
     indiceAtual = 0;
     reprodutorAtivo = true;
+    aguardandoProximoItem = false;
     
     function avancar() {
         if (!reprodutorAtivo) return;
@@ -427,6 +469,7 @@ function iniciarLoop(playlistItems) {
         indiceAtual++;
         
         reproduzirItem(item, () => {
+            // NÃO SAI DO FULLSCREEN - continua no loop
             avancar();
         });
     }
@@ -484,6 +527,10 @@ async function atualizarPlaylist() {
     } else {
         renderizarUI(null, "Nenhuma playlist atribuída. A aguardar...");
         pararReproducao();
+        // Sair do fullscreen apenas se não tiver playlist
+        if (estaEmFullscreen) {
+            sairFullscreen();
+        }
         const container = document.getElementById('tvMediaContainer');
         if (container) {
             container.innerHTML = `<div class="no-media">Nenhuma playlist atribuída.<br><br> <strong>Como emparelhar:</strong><br>1. Aceda ao painel de administração<br>2. Encontre o código <strong style="color:#ffb347;">${CODIGO_TV}</strong><br>3. Atribua uma playlist a esta TV</div>`;
