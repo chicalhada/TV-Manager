@@ -170,7 +170,7 @@ h3 {
 }
 
 /* ============================================================
-   ESTILOS PARA FULLSCREEN (CORRIGIDOS)
+   ESTILOS PARA FULLSCREEN - TELA CHEIA TOTAL
    ============================================================ */
 .fullscreen-mode {
     position: fixed;
@@ -183,14 +183,35 @@ h3 {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
 }
 
 .fullscreen-mode video,
 .fullscreen-mode img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.fullscreen-mode video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    background: #000;
+}
+
+.fullscreen-mode img {
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    background: #000;
 }
 
 .exit-fullscreen-btn {
@@ -259,6 +280,28 @@ h3 {
 }
 
 /* ============================================================
+   BOTÃO INICIAR FULLSCREEN
+   ============================================================ */
+.btn-fullscreen {
+    margin-top: 20px;
+    padding: 15px 40px;
+    background: #ffb347;
+    border: none;
+    border-radius: 50px;
+    color: #000;
+    font-weight: bold;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: 0.3s;
+    box-shadow: 0 4px 15px rgba(255, 180, 70, 0.3);
+}
+
+.btn-fullscreen:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 25px rgba(255, 180, 70, 0.5);
+}
+
+/* ============================================================
    RESPONSIVIDADE
    ============================================================ */
 @media (max-width: 780px) {
@@ -279,6 +322,10 @@ h3 {
         bottom: 20px;
         right: 20px;
         padding: 12px 20px;
+        font-size: 1rem;
+    }
+    .btn-fullscreen {
+        padding: 12px 25px;
         font-size: 1rem;
     }
 }
