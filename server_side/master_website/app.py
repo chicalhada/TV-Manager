@@ -39,6 +39,33 @@ JWT_SECRET = "tvmanager_secret_key_2026"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+
+############################################################################################################
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        if not token:
+            return jsonify({"error": "Token não fornecido"}), 401
+        
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            request.current_user = payload
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+
+
+
+
+
 ########################################################################################
 
 @app.route("/")
@@ -339,23 +366,6 @@ def get_current_user():
 
 ##############################################################################################################
 
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        token = request.headers.get("Authorization", "").replace("Bearer ", "")
-        if not token:
-            return jsonify({"error": "Token não fornecido"}), 401
-        
-        try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            request.current_user = payload
-        except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Token expirado"}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"error": "Token inválido"}), 401
-        
-        return f(*args, **kwargs)
-    return decorated_function
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
