@@ -1,8 +1,30 @@
 // ============================================================
-// SOLICITAR CÓDIGO ÚNICO AO BACKEND
+// JAVASCRIPT COMPLETO
+// ============================================================
+
+// ============================================================
+// 1. CONFIGURAÇÃO INICIAL
 // ============================================================
 const API_BASE = "http://127.0.0.1:5000";
 
+// ============================================================
+// 2. VARIÁVEIS GLOBAIS
+// ============================================================
+let CODIGO_TV = null;
+let intervaloPolling = null;
+let reprodutorAtivo = false;
+let itemsPlaylist = [];
+let indiceAtual = 0;
+let temporizadorAtual = null;
+let elementoVideoAtual = null;
+let estaEmFullscreen = false;
+let fullscreenContainer = null;
+
+// ============================================================
+// 3. FUNÇÕES DE API
+// ============================================================
+
+// 3.1 Obter ou criar código único
 async function obterOuCriarCodigo() {
     // Verificar se já temos código guardado
     let codigo = localStorage.getItem("tv_codigo");
@@ -27,16 +49,7 @@ async function obterOuCriarCodigo() {
     return codigo;
 }
 
-// ============================================================
-let CODIGO_TV = null;
-let intervaloPolling = null;
-let reprodutorAtivo = false;
-let itemsPlaylist = [];
-let indiceAtual = 0;
-let temporizadorAtual = null;
-let elementoVideoAtual = null;
-
-// ==================== API CALLS ====================
+// 3.2 Registrar TV no backend
 async function registarTV() {
     try {
         const response = await fetch(`${API_BASE}/api/tv/register`, {
@@ -53,6 +66,7 @@ async function registarTV() {
     }
 }
 
+// 3.3 Buscar playlist do backend
 async function buscarPlaylist() {
     try {
         const response = await fetch(`${API_BASE}/api/child/${CODIGO_TV}/playlist`);
@@ -75,7 +89,143 @@ async function buscarPlaylist() {
     }
 }
 
-// ==================== REPRODUÇÃO EM LOOP ====================
+// ============================================================
+// 4. FUNÇÕES DE FULLSCREEN
+// ============================================================
+
+// 4.1 Entrar em modo fullscreen
+function entrarFullscreen(elemento) {
+    if (document.fullscreenElement) {
+        sairFullscreen();
+        return;
+    }
+
+    // Criar container fullscreen
+    const container = document.createElement('div');
+    container.className = 'fullscreen-mode';
+    container.id = 'fullscreenContainer';
+    
+    // Clonar o elemento para o fullscreen
+    const clone = elemento.cloneNode(true);
+    container.appendChild(clone);
+    
+    // Adicionar botão de sair
+    const exitBtn = document.createElement('button');
+    exitBtn.className = 'exit-fullscreen-btn';
+    exitBtn.innerHTML = `
+        <svg viewBox="0 0 24 24">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+        Sair da Tela Cheia
+    `;
+    exitBtn.onclick = sairFullscreen;
+    container.appendChild(exitBtn);
+    
+    // Adicionar controles adicionais
+    const controls = document.createElement('div');
+    controls.className = 'fullscreen-controls';
+    controls.innerHTML = `
+        <button onclick="pauseResume()">⏸️ Pausar/Retomar</button>
+        <button onclick="proximoItem()">⏭️ Próximo</button>
+    `;
+    container.appendChild(controls);
+    
+    document.body.appendChild(container);
+    
+    // Ativar modo fullscreen da API
+    if (container.requestFullscreen) {
+        container.requestFullscreen().catch(err => {
+            console.log("Erro ao entrar em fullscreen:", err);
+        });
+    }
+    
+    estaEmFullscreen = true;
+    fullscreenContainer = container;
+    
+    // Se for vídeo, dar play
+    const video = container.querySelector('video');
+    if (video) {
+        video.play().catch(e => console.log("Erro ao dar play em fullscreen:", e));
+    }
+}
+
+// 4.2 Sair do modo fullscreen
+function sairFullscreen() {
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => {
+            console.log("Erro ao sair do fullscreen:", err);
+        });
+    }
+    
+    const container = document.getElementById('fullscreenContainer');
+    if (container) {
+        container.remove();
+    }
+    
+    estaEmFullscreen = false;
+    fullscreenContainer = null;
+}
+
+// 4.3 Pausar/Retomar vídeo
+function pauseResume() {
+    const container = document.getElementById('fullscreenContainer');
+    if (!container) return;
+    
+    const video = container.querySelector('video');
+    if (video) {
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
+        }
+    }
+}
+
+// 4.4 Avançar para próximo item
+function proximoItem() {
+    // Forçar avanço para o próximo item
+    if (temporizadorAtual) {
+        clearTimeout(temporizadorAtual);
+        temporizadorAtual = null;
+    }
+    
+    // Se estiver em fullscreen, sair e recarregar
+    if (estaEmFullscreen) {
+        sairFullscreen();
+    }
+    
+    // Avançar para o próximo item
+    if (reprodutorAtivo) {
+        if (indiceAtual >= itemsPlaylist.length) {
+            indiceAtual = 0;
+        }
+        const item = itemsPlaylist[indiceAtual];
+        indiceAtual++;
+        
+        const container = document.getElementById('tvMediaContainer');
+        if (container) {
+            reproduzirItem(item, () => {
+                if (reprodutorAtivo) {
+                    // Continuar o loop
+                    setTimeout(() => {
+                        if (indiceAtual >= itemsPlaylist.length) {
+                            indiceAtual = 0;
+                        }
+                        const nextItem = itemsPlaylist[indiceAtual];
+                        indiceAtual++;
+                        reproduzirItem(nextItem, arguments.callee);
+                    }, 100);
+                }
+            });
+        }
+    }
+}
+
+// ============================================================
+// 5. FUNÇÕES DE REPRODUÇÃO
+// ============================================================
+
+// 5.1 Parar reprodução
 function pararReproducao() {
     if (temporizadorAtual) {
         clearTimeout(temporizadorAtual);
@@ -86,8 +236,14 @@ function pararReproducao() {
         elementoVideoAtual = null;
     }
     reprodutorAtivo = false;
+    
+    // Se estiver em fullscreen, sair
+    if (estaEmFullscreen) {
+        sairFullscreen();
+    }
 }
 
+// 5.2 Reproduzir um item específico
 function reproduzirItem(item, onTerminar) {
     const viewerContainer = document.getElementById('tvMediaContainer');
     if (!viewerContainer) return;
@@ -106,6 +262,12 @@ function reproduzirItem(item, onTerminar) {
         video.style.maxWidth = "100%";
         video.style.maxHeight = "70vh";
         video.style.borderRadius = "24px";
+        
+        // Quando o vídeo estiver pronto, entrar em fullscreen
+        video.onloadeddata = () => {
+            entrarFullscreen(video);
+        };
+        
         video.onended = () => {
             elementoVideoAtual = null;
             onTerminar();
@@ -129,6 +291,11 @@ function reproduzirItem(item, onTerminar) {
         img.style.maxHeight = "70vh";
         img.style.borderRadius = "24px";
         
+        // Quando a imagem carregar, entrar em fullscreen
+        img.onload = () => {
+            entrarFullscreen(img);
+        };
+        
         viewerContainer.innerHTML = '';
         viewerContainer.appendChild(img);
         
@@ -145,6 +312,7 @@ function reproduzirItem(item, onTerminar) {
     }
 }
 
+// 5.3 Iniciar loop de reprodução
 function iniciarLoop(playlistItems) {
     pararReproducao();
     
@@ -178,7 +346,11 @@ function iniciarLoop(playlistItems) {
     avancar();
 }
 
-// ==================== RENDER UI ====================
+// ============================================================
+// 6. FUNÇÕES DE UI
+// ============================================================
+
+// 6.1 Renderizar interface
 function renderizarUI(playlist, statusMensagem) {
     const root = document.getElementById('appRoot');
     if (!root) return;
@@ -190,7 +362,7 @@ function renderizarUI(playlist, statusMensagem) {
     root.innerHTML = `
         <div class="card tv-mode">
             <div>
-                <div class="fixed-code-badge">CÓDIGO DE EMPARELHAMENTO</div>
+                <div class="fixed-code-badge">📺 CÓDIGO DE EMPARELHAMENTO</div>
                 <h2 style="color:#ffd9a5; margin-top: 5px;">MODO TV</h2>
                 <p style="color:#bbccff; margin-bottom: 5px;">Usa o código abaixo para emparelhar esta TV</p>
                 <div class="tv-code-box">
@@ -201,18 +373,22 @@ function renderizarUI(playlist, statusMensagem) {
                 </div>
             </div>
             <div style="margin-top: 40px; width:100%;">
-                <h3 style="color:#ffd27a;">A REPRODUZIR</h3>
+                <h3 style="color:#ffd27a;">📽️ A REPRODUZIR</h3>
                 <div id="tvMediaContainer" class="media-grid" style="min-height: 300px; display: flex; align-items: center; justify-content: center;"></div>
             </div>
         </div>
     `;
 }
 
-// ==================== POLLING E MAIN ====================
+// ============================================================
+// 7. FUNÇÃO PRINCIPAL - POLLING
+// ============================================================
+
+// 7.1 Atualizar playlist via polling
 async function atualizarPlaylist() {
     const playlist = await buscarPlaylist();
     
-    if (playlist && playlist.items) {
+    if (playlist && playlist.items && playlist.items.length > 0) {
         renderizarUI(playlist, `Playlist: ${playlist.name} (${playlist.items.length} itens)`);
         iniciarLoop(playlist.items);
     } else {
@@ -225,7 +401,10 @@ async function atualizarPlaylist() {
     }
 }
 
-// ==================== INICIALIZAÇÃO ASSÍNCRONA ====================
+// ============================================================
+// 8. INICIALIZAÇÃO
+// ============================================================
+
 (async function iniciar() {
     // Obter ou criar código
     CODIGO_TV = await obterOuCriarCodigo();
@@ -240,4 +419,11 @@ async function atualizarPlaylist() {
     // Polling a cada 30 segundos
     if (intervaloPolling) clearInterval(intervaloPolling);
     intervaloPolling = setInterval(atualizarPlaylist, 30000);
+    
+    // Listener para sair do fullscreen com ESC
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && estaEmFullscreen) {
+            sairFullscreen();
+        }
+    });
 })();
