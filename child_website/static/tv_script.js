@@ -19,7 +19,7 @@ let temporizadorAtual = null;
 let elementoVideoAtual = null;
 let estaEmFullscreen = false;
 let fullscreenContainer = null;
-let codigoExibido = false;
+let temporizadorMouse = null;
 
 // ============================================================
 // 3. FUNÇÃO PARA GERAR ID ÚNICO DO DISPOSITIVO
@@ -160,17 +160,17 @@ function entrarFullscreen(elemento) {
     
     clone.style.width = '100vw';
     clone.style.height = '100vh';
-    clone.style.objectFit = 'cover';
-    clone.style.position = 'absolute';
-    clone.style.top = '50%';
-    clone.style.left = '50%';
-    clone.style.transform = 'translate(-50%, -50%)';
+    clone.style.objectFit = 'contain';
+    clone.style.display = 'block';
+    clone.style.background = '#000';
     clone.style.borderRadius = '0';
     
     container.appendChild(clone);
     
+    // Botão Sair
     const exitBtn = document.createElement('button');
     exitBtn.className = 'exit-fullscreen-btn';
+    exitBtn.id = 'exitFullscreenBtn';
     exitBtn.innerHTML = `
         <svg viewBox="0 0 24 24">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
@@ -180,8 +180,10 @@ function entrarFullscreen(elemento) {
     exitBtn.onclick = sairFullscreen;
     container.appendChild(exitBtn);
     
+    // Controles
     const controls = document.createElement('div');
     controls.className = 'fullscreen-controls';
+    controls.id = 'fullscreenControls';
     controls.innerHTML = `
         <button onclick="pauseResume()">⏸️ Pausar/Retomar</button>
         <button onclick="proximoItem()">⏭️ Próximo</button>
@@ -201,6 +203,10 @@ function entrarFullscreen(elemento) {
     estaEmFullscreen = true;
     fullscreenContainer = container;
     
+    // Eventos do mouse
+    container.addEventListener('mousemove', mostrarControles);
+    container.addEventListener('mouseleave', ocultarControles);
+    
     const video = container.querySelector('video');
     if (video) {
         video.play().catch(e => console.log("Erro ao dar play em fullscreen:", e));
@@ -216,11 +222,52 @@ function sairFullscreen() {
     
     const container = document.getElementById('fullscreenContainer');
     if (container) {
+        container.removeEventListener('mousemove', mostrarControles);
+        container.removeEventListener('mouseleave', ocultarControles);
         container.remove();
     }
     
     estaEmFullscreen = false;
     fullscreenContainer = null;
+    
+    if (temporizadorMouse) {
+        clearTimeout(temporizadorMouse);
+        temporizadorMouse = null;
+    }
+}
+
+// ============================================================
+// 6. FUNÇÕES DE CONTROLE DO MOUSE
+// ============================================================
+
+function mostrarControles() {
+    const exitBtn = document.getElementById('exitFullscreenBtn');
+    const controls = document.getElementById('fullscreenControls');
+    
+    if (exitBtn) exitBtn.classList.add('visible');
+    if (controls) controls.classList.add('visible');
+    
+    if (temporizadorMouse) {
+        clearTimeout(temporizadorMouse);
+        temporizadorMouse = null;
+    }
+    
+    temporizadorMouse = setTimeout(() => {
+        ocultarControles();
+    }, 3000);
+}
+
+function ocultarControles() {
+    const exitBtn = document.getElementById('exitFullscreenBtn');
+    const controls = document.getElementById('fullscreenControls');
+    
+    if (exitBtn) exitBtn.classList.remove('visible');
+    if (controls) controls.classList.remove('visible');
+    
+    if (temporizadorMouse) {
+        clearTimeout(temporizadorMouse);
+        temporizadorMouse = null;
+    }
 }
 
 function pauseResume() {
@@ -235,6 +282,7 @@ function pauseResume() {
             video.pause();
         }
     }
+    mostrarControles();
 }
 
 function proximoItem() {
@@ -267,10 +315,11 @@ function proximoItem() {
             });
         }
     }
+    mostrarControles();
 }
 
 // ============================================================
-// 6. FUNÇÕES DE REPRODUÇÃO
+// 7. FUNÇÕES DE REPRODUÇÃO
 // ============================================================
 
 function pararReproducao() {
@@ -307,9 +356,7 @@ function reproduzirItem(item, onTerminar) {
         video.style.borderRadius = "24px";
         
         video.onloadeddata = () => {
-            if (codigoExibido) {
-                entrarFullscreen(video);
-            }
+            entrarFullscreen(video);
         };
         
         video.onended = () => {
@@ -336,9 +383,7 @@ function reproduzirItem(item, onTerminar) {
         img.style.borderRadius = "24px";
         
         img.onload = () => {
-            if (codigoExibido) {
-                entrarFullscreen(img);
-            }
+            entrarFullscreen(img);
         };
         
         viewerContainer.innerHTML = '';
@@ -390,7 +435,7 @@ function iniciarLoop(playlistItems) {
 }
 
 // ============================================================
-// 7. FUNÇÕES DE UI
+// 8. FUNÇÕES DE UI
 // ============================================================
 
 function renderizarUI(playlist, statusMensagem) {
@@ -417,7 +462,6 @@ function renderizarUI(playlist, statusMensagem) {
                 <div class="tv-status" id="tvStatusMsg">
                     ${statusMensagem || (temPlaylist ? `A reproduzir: ${nomePlaylist} (${qtdMedia} itens)` : 'A aguardar pela playlist...')}
                 </div>
-                ${temPlaylist ? `<button class="btn-fullscreen" onclick="iniciarFullscreen()">🎬 INICIAR EM TELA CHEIA</button>` : ''}
             </div>
             <div style="margin-top: 40px; width:100%;">
                 <h3 style="color:#ffd27a;">📽️ A REPRODUZIR</h3>
@@ -425,39 +469,10 @@ function renderizarUI(playlist, statusMensagem) {
             </div>
         </div>
     `;
-    
-    if (temPlaylist && codigoExibido) {
-        setTimeout(() => {
-            const container = document.getElementById('tvMediaContainer');
-            if (container) {
-                const video = container.querySelector('video');
-                const img = container.querySelector('img');
-                if (video) {
-                    entrarFullscreen(video);
-                } else if (img) {
-                    entrarFullscreen(img);
-                }
-            }
-        }, 500);
-    }
-}
-
-function iniciarFullscreen() {
-    codigoExibido = true;
-    const container = document.getElementById('tvMediaContainer');
-    if (container) {
-        const video = container.querySelector('video');
-        const img = container.querySelector('img');
-        if (video) {
-            entrarFullscreen(video);
-        } else if (img) {
-            entrarFullscreen(img);
-        }
-    }
 }
 
 // ============================================================
-// 8. FUNÇÃO PRINCIPAL - POLLING
+// 9. FUNÇÃO PRINCIPAL - POLLING
 // ============================================================
 
 async function atualizarPlaylist() {
@@ -477,15 +492,13 @@ async function atualizarPlaylist() {
 }
 
 // ============================================================
-// 9. INICIALIZAÇÃO
+// 10. INICIALIZAÇÃO
 // ============================================================
 
 (async function iniciar() {
     CODIGO_TV = await obterOuCriarCodigo();
     console.log("Código da TV (fixo):", CODIGO_TV);
     console.log("ID do dispositivo:", obterIdDispositivo());
-    
-    codigoExibido = true;
     
     await registarTV();
     await atualizarPlaylist();
