@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - TV Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 to-purple-800 min-h-screen flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">📺 TV Manager</h1>
+            <p class="text-gray-500 mt-2">Painel Administrativo</p>
+        </div>
+        <form id="loginForm">
+            <div class="mb-5">
+                <label for="username" class="block text-gray-700 font-medium mb-2">Usuário</label>
+                <input type="text" id="username" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="mb-6">
+                <label for="password" class="block text-gray-700 font-medium mb-2">Senha</label>
+                <input type="password" id="password" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-semibold">Entrar</button>
+        </form>
+        <div id="errorMessage" class="mt-4 text-center text-red-600 text-sm hidden"></div>
+    </div>
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        const form = document.getElementById('loginForm');
+        const errorDiv = document.getElementById('errorMessage');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            errorDiv.classList.add('hidden');
+            try {
+                const res = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    localStorage.setItem('admin_token', data.token);
+                    localStorage.setItem('admin_user', data.user);
+                    window.location.href = '/admin.html';
+                } else {
+                    errorDiv.textContent = data.error || 'Falha no login';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Erro de conexão com o servidor';
+                errorDiv.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
