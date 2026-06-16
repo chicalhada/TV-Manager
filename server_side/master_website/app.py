@@ -6,14 +6,15 @@ import uuid
 import random
 import string
 from flask import send_from_directory
+import bcrypt
+import jwt
+from functools import wraps
+from datetime import datetime, timedelta
 from db import (
     add_child_site,
     list_child_sites,
     add_media,
     list_media,
-    add_playlist_db,
-    add_playlist_item,
-    get_playlist_with_items,
     add_playlist,
     add_playlist_item,
     get_playlist_items,
@@ -22,7 +23,10 @@ from db import (
     get_current_playlist_for_tv,
     get_connection,
     get_media,
-    get_child_site_by_codigo   # <-- ADICIONADO
+    get_child_site_by_codigo,
+    add_user,
+    get_user_by_username,
+    authenticate_user
 )
 
 app = Flask(__name__)
@@ -30,6 +34,10 @@ CORS(app)
 
 upload_folder = 'uploads/'
 os.makedirs(upload_folder, exist_ok=True)
+
+JWT_SECRET = "tvmanager_secret_key_2026"
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
 
 ########################################################################################
 
@@ -48,15 +56,17 @@ def health():
 ################################################################################
 
 @app.route("/api/tvs", methods=["GET"])
+@login_required
 def get_tvs():
     tvs = list_child_sites()
     return jsonify(tvs)
 
 @app.route('/tv')
 def tv():
-    return send_from_directory('static', 'tv.html')   # <-- CORRIGIDO
+    return send_from_directory('static', 'tv.html')
 
 @app.route("/api/tvs", methods=["POST"])
+@login_required
 def add_tv():
     data = request.get_json()
     child_id = add_child_site(data["name"], data.get("ip"), None)
@@ -82,25 +92,30 @@ def register_tv():
 ################################################################################
 
 @app.route("/api/playlists", methods=["GET"])
+@login_required
 def get_playlists():
     playlists = list_playlists()
     return jsonify(playlists)
 
 @app.route("/api/playlists", methods=["POST"])
+@login_required
 def add_playlist():
     data = request.get_json()
-    playlist_id = add_playlist_db(data["name"])
-    playlist = get_playlist_with_items(playlist_id)
+    playlist_id = add_playlist(data["name"])
+    playlist_items = get_playlist_items(playlist_id)
+    playlist = {"id": playlist_id, "name": data["name"], "items": playlist_items}
     return jsonify(playlist), 201
 
 @app.route("/api/playlists/<int:playlist_id>", methods=["GET"])
+@login_required
 def get_playlist(playlist_id):
-    playlist = get_playlist_with_items(playlist_id)
-    if not playlist:
+    items = get_playlist_items(playlist_id)
+    if items is None:
         return jsonify({"error": "Playlist não encontrada"}), 404
-    return jsonify(playlist)
+    return jsonify({"id": playlist_id, "items": items})
 
 @app.route("/api/playlists/<int:playlist_id>/items", methods=["POST"])
+@login_required
 def add_item_to_playlist(playlist_id):
     item = request.get_json()
     media_id = item.get("media_id")
@@ -109,19 +124,20 @@ def add_item_to_playlist(playlist_id):
     if not media_id:
         return jsonify({"error": "media_id é obrigatório"}), 400
     
-    playlist = get_playlist_with_items(playlist_id)
-    if not playlist:
+    items = get_playlist_items(playlist_id)
+    if items is None:
         return jsonify({"error": "Playlist não encontrada"}), 404
     
-    next_order = len(playlist.get("items", [])) + 1
+    next_order = len(items) + 1
     add_playlist_item(playlist_id, media_id, duration, next_order)
     
-    playlist_atualizada = get_playlist_with_items(playlist_id)
-    return jsonify(playlist_atualizada), 201
+    playlist_atualizada = get_playlist_items(playlist_id)
+    return jsonify({"id": playlist_id, "items": playlist_atualizada}), 201
 
 ########################################################################################
 
 @app.route("/api/upload", methods=["POST"])
+@login_required
 def upload_file():
     files = request.files.getlist('file')
     
@@ -150,14 +166,10 @@ def upload_file():
     return jsonify(resultados), 201
 
 @app.route("/api/media", methods=["GET"])
+@login_required
 def get_media():
     media = list_media()
     return jsonify(media)
-
-
-
-
-
 
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
@@ -165,8 +177,8 @@ def uploaded_file(filename):
 
 ################################################################################
 
-
 @app.route("/api/assign", methods=["POST"])
+@login_required
 def assign_playlist():
     data = request.get_json()
     child_site_codigo = data.get("child_site_codigo")
@@ -178,12 +190,9 @@ def assign_playlist():
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
-    assign_playlist_to_tv(child_site["id"], playlist_id)
-    return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
     
     assign_playlist_to_tv(child_site["id"], playlist_id)
     return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
-
 
 @app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
 def get_child_playlist(child_site_codigo):
@@ -198,6 +207,7 @@ def get_child_playlist(child_site_codigo):
 ################################################################################
 
 @app.route("/api/tvs/<int:child_id>", methods=["DELETE"])
+@login_required
 def delete_tv(child_id):
     conn = get_connection()
     cursor = conn.cursor()
@@ -206,10 +216,8 @@ def delete_tv(child_id):
     conn.close()
     return jsonify({"success": True, "message": "TV removida com sucesso"}), 200
 
-
-
-
 @app.route("/api/media/<int:media_id>", methods=["DELETE"])
+@login_required
 def delete_media(media_id):
     media = get_media(media_id)
     if not media:
@@ -226,15 +234,9 @@ def delete_media(media_id):
     
     return jsonify({"success": True, "message": "Media removido com sucesso"}), 200
 
-
-
-
-
 @app.route("/api/playlists/<int:playlist_id>", methods=["DELETE"])
+@login_required 
 def delete_playlist(playlist_id):
-    playlist = get_playlist_with_items(playlist_id)
-    if not playlist:
-        return jsonify({"error": "Playlist não encontrada"}), 404
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
@@ -244,6 +246,7 @@ def delete_playlist(playlist_id):
     return jsonify({"success": True, "message": "Playlist removida com sucesso"}), 200
 
 @app.route("/api/playlists/<int:playlist_id>/items/<int:item_id>", methods=["DELETE"])
+@login_required
 def delete_playlist_item(playlist_id, item_id):
     conn = get_connection()
     cursor = conn.cursor()
@@ -261,6 +264,98 @@ def delete_playlist_item(playlist_id, item_id):
     return jsonify({"success": True, "message": "Item removido da playlist"}), 200
 
 ###########################################################################################################
+
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+    email = data.get("email")
+
+    if not username or not password:
+        return jsonify({"error": "Username e password são obrigatórios"}), 400
+
+    existing = get_user_by_username(username)
+    if existing:
+        return jsonify({"error": "Username já existe"}), 409
+
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    user_id = add_user(username, password_hash, email)
+    return jsonify({"success": True, "user_id": user_id, "username": username}), 201
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Username e password são obrigatórios"}), 400
+
+    user = authenticate_user(username, password)
+    if not user:
+        return jsonify({"error": "Credenciais inválidas"}), 401
+
+    expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    token = jwt.encode({
+        "user_id": user["id"],
+        "username": user["username"],
+        "role": user["role"],
+        "exp": expiration
+    }, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+    return jsonify({
+        "success": True,
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"]
+        }
+    }), 200
+
+@app.route("/api/auth/me", methods=["GET"])
+def get_current_user():
+    token = request.headers.get("Authorization", "").replace("Bearer ", "")
+    if not token:
+        return jsonify({"error": "Token necessário"}), 401
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user = get_user_by_username(payload["username"])
+        if not user:
+            return jsonify({"error": "Utilizador não encontrado"}), 404
+        return jsonify({
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"]
+        }), 200
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expirado"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Token inválido"}), 401
+
+##############################################################################################################
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get("Authorization", "").replace("Bearer ", "")
+        if not token:
+            return jsonify({"error": "Token não fornecido"}), 401
+        
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            request.current_user = payload
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

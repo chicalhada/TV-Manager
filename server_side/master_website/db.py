@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime
+import bcrypt
 
 DB_PATH = 'tvmanager.db'
 
@@ -105,6 +106,17 @@ def delete_user(user_id):
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
+
+
+def authenticate_user(username, password):
+    user = get_user_by_username(username)
+    if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+        return user
+    return None
+
+
+
+
 
 def add_child_site(name, ip=None, codigo=None):
     conn = get_connection()
