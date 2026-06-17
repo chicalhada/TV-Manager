@@ -26,7 +26,7 @@ let fullscreenAtivado = false;
 // 3. INICIALIZAÇÃO DO PLAYER
 // ============================================================
 
-// Tentar obter código do localStorage ou via postMessage
+// Tentar obter código do localStorage
 CODIGO_TV = localStorage.getItem("tv_codigo_player");
 
 // Escutar mensagens da página principal
@@ -44,7 +44,6 @@ if (CODIGO_TV) {
     console.log("Código encontrado no localStorage:", CODIGO_TV);
     iniciarPlayer();
 } else {
-    // Mostrar mensagem aguardando código
     const root = document.getElementById('playerRoot');
     if (root) {
         root.innerHTML = `
@@ -83,11 +82,10 @@ async function buscarPlaylist() {
 }
 
 // ============================================================
-// 5. FUNÇÕES DE FULLSCREEN - TELA CHEIA TOTAL
+// 5. FUNÇÕES DE FULLSCREEN
 // ============================================================
 
 function entrarFullscreen(elemento) {
-    // Se já estiver em fullscreen, apenas atualiza o conteúdo
     if (estaEmFullscreen) {
         const container = document.getElementById('fullscreenContainer');
         if (container) {
@@ -118,17 +116,14 @@ function entrarFullscreen(elemento) {
     container.style.overflow = 'hidden';
     
     const clone = elemento.cloneNode(true);
-    
     clone.style.width = '100vw';
     clone.style.height = '100vh';
     clone.style.objectFit = 'cover';
     clone.style.display = 'block';
     clone.style.background = '#000';
     clone.style.borderRadius = '0';
-    
     container.appendChild(clone);
     
-    // Botão Sair
     const exitBtn = document.createElement('button');
     exitBtn.className = 'exit-fullscreen-btn';
     exitBtn.id = 'exitFullscreenBtn';
@@ -141,7 +136,6 @@ function entrarFullscreen(elemento) {
     exitBtn.onclick = sairFullscreen;
     container.appendChild(exitBtn);
     
-    // Controles
     const controls = document.createElement('div');
     controls.className = 'fullscreen-controls';
     controls.id = 'fullscreenControls';
@@ -153,7 +147,6 @@ function entrarFullscreen(elemento) {
     
     document.body.appendChild(container);
     
-    // ATIVAR FULLSCREEN (F11) AUTOMATICAMENTE
     if (container.requestFullscreen && !fullscreenAtivado) {
         container.requestFullscreen({
             navigationUI: 'hide'
@@ -162,7 +155,6 @@ function entrarFullscreen(elemento) {
             console.log("Fullscreen ativado automaticamente!");
         }).catch(err => {
             console.log("Erro ao entrar em fullscreen:", err);
-            // Tentar novamente após 1 segundo
             setTimeout(() => {
                 container.requestFullscreen({
                     navigationUI: 'hide'
@@ -174,7 +166,6 @@ function entrarFullscreen(elemento) {
     estaEmFullscreen = true;
     fullscreenContainer = container;
     
-    // Eventos do mouse
     container.addEventListener('mousemove', mostrarControles);
     container.addEventListener('mouseleave', ocultarControles);
     
@@ -209,7 +200,7 @@ function sairFullscreen() {
 }
 
 // ============================================================
-// 6. FUNÇÕES DE CONTROLE DO MOUSE
+// 6. FUNÇÕES DE CONTROLE
 // ============================================================
 
 function mostrarControles() {
@@ -418,13 +409,27 @@ function iniciarLoop(playlistItems) {
 }
 
 // ============================================================
-// 8. FUNÇÃO PRINCIPAL - INICIAR PLAYER
+// 8. FUNÇÕES PRINCIPAIS
 // ============================================================
+
+async function atualizarPlaylist() {
+    const playlist = await buscarPlaylist();
+    
+    if (playlist && playlist.items && playlist.items.length > 0) {
+        console.log("Playlist atualizada:", playlist);
+        iniciarLoop(playlist.items);
+    } else {
+        pararReproducao();
+        const container = document.getElementById('tvMediaContainer');
+        if (container) {
+            container.innerHTML = `<div class="no-media">Nenhuma playlist atribuída. Aguardando...</div>`;
+        }
+    }
+}
 
 async function iniciarPlayer() {
     console.log("Iniciando player com código:", CODIGO_TV);
     
-    // Limpar container
     const root = document.getElementById('playerRoot');
     if (root) {
         root.innerHTML = `
@@ -434,14 +439,14 @@ async function iniciarPlayer() {
         `;
     }
     
-    // Buscar playlist
     await atualizarPlaylist();
     
-    // Polling a cada 30 segundos
     if (intervaloPolling) clearInterval(intervaloPolling);
     intervaloPolling = setInterval(atualizarPlaylist, 30000);
     
-    // Listener para sair do fullscreen com ESC
     document.addEventListener('fullscreenchange', () => {
         if (!document.fullscreenElement && estaEmFullscreen) {
-            sairFullscreen
+            sairFullscreen();
+        }
+    });
+}

@@ -26,7 +26,11 @@ from db import (
     get_child_site_by_codigo,
     add_user,
     get_user_by_username,
-    authenticate_user
+    authenticate_user,
+    list_users as db_list_users,
+    delete_user as db_delete_user,
+    get_assignment_for_tv,
+    get_playlist
 )
 
 app = Flask(__name__)
@@ -382,11 +386,9 @@ def get_current_user():
 
 ##############################################################################################################
 
-
 @app.route('/api/users', methods=['GET'])
 @login_required
 def list_users():
-    from db import list_users as db_list_users
     return jsonify(db_list_users())
 
 @app.route('/api/users', methods=['POST'])
@@ -409,14 +411,12 @@ def create_user():
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 @login_required
 def delete_user(user_id):
-    from db import delete_user as db_delete_user
     db_delete_user(user_id)
     return jsonify({'message': 'removido'}), 200
 
 @app.route('/api/assign', methods=['GET'])
 @login_required
 def get_assignments():
-    from db import list_child_sites, get_assignment_for_tv, get_playlist
     sites = list_child_sites()
     result = []
     for site in sites:
@@ -431,7 +431,6 @@ def get_assignments():
                 'assigned_at': assign['assigned_at']
             })
     return jsonify(result)
-
 
 ###############################################################################################################
 
