@@ -60,21 +60,37 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-
-
-
-
-
-
 ########################################################################################
 
-@app.route("/")
-def test():
-    return "TV Manager - Admin"
+@app.route('/')
+def index():
+    return send_from_directory('templates', 'login.html')
+
+@app.route('/login.html')
+def login_page():
+    return send_from_directory('templates', 'login.html')
+
+@app.route('/index.html')
+def dashboard():
+    return send_from_directory('templates', 'index.html')
+
+@app.route('/register.html')
+def register_page():
+    return send_from_directory('templates', 'register.html')
 
 @app.route('/static/<path:filename>')
-def serve_static(filename):
+def static_files(filename):
     return send_from_directory('static', filename)
+
+@app.route('/style.css')
+def serve_css():
+    return send_from_directory('static', 'style.css')
+
+@app.route('/admin.js')
+def serve_js():
+    return send_from_directory('static', 'admin.js')
+
+########################################################################################
 
 @app.route("/api/health")
 def health():
@@ -366,6 +382,58 @@ def get_current_user():
 
 ##############################################################################################################
 
+
+@app.route('/api/users', methods=['GET'])
+@login_required
+def list_users():
+    from db import list_users as db_list_users
+    return jsonify(db_list_users())
+
+@app.route('/api/users', methods=['POST'])
+@login_required
+def create_user():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    email = data.get('email')
+    role = data.get('role', 'admin')
+    if not username or not password:
+        return jsonify({'error': 'Usuário e senha obrigatórios'}), 400
+    existing = get_user_by_username(username)
+    if existing:
+        return jsonify({'error': 'Usuário já existe'}), 409
+    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    user_id = add_user(username, password_hash, email, role)
+    return jsonify({'id': user_id, 'username': username}), 201
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def delete_user(user_id):
+    from db import delete_user as db_delete_user
+    db_delete_user(user_id)
+    return jsonify({'message': 'removido'}), 200
+
+@app.route('/api/assign', methods=['GET'])
+@login_required
+def get_assignments():
+    from db import list_child_sites, get_assignment_for_tv, get_playlist
+    sites = list_child_sites()
+    result = []
+    for site in sites:
+        assign = get_assignment_for_tv(site['id'])
+        if assign:
+            playlist = get_playlist(assign['playlist_id'])
+            result.append({
+                'child_site_id': site['id'],
+                'child_site_name': site['name'],
+                'playlist_id': assign['playlist_id'],
+                'playlist_name': playlist['name'] if playlist else None,
+                'assigned_at': assign['assigned_at']
+            })
+    return jsonify(result)
+
+
+###############################################################################################################
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

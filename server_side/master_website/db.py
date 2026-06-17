@@ -114,10 +114,6 @@ def authenticate_user(username, password):
         return user
     return None
 
-
-
-
-
 def add_child_site(name, ip=None, codigo=None):
     conn = get_connection()
     cursor = conn.cursor()

@@ -12,6 +12,8 @@
             <h1 class="text-3xl font-bold text-gray-800">📺 TV Manager</h1>
             <p class="text-gray-500 mt-2">Painel Administrativo</p>
         </div>
+
+        <!-- Formulário de Login -->
         <form id="loginForm">
             <div class="mb-5">
                 <label for="username" class="block text-gray-700 font-medium mb-2">Usuário</label>
@@ -23,19 +25,78 @@
             </div>
             <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-semibold">Entrar</button>
         </form>
+
+        <!-- Link para registo -->
+        <div class="mt-4 text-center">
+            <span class="text-gray-500">Não tem conta?</span>
+            <button id="showRegisterBtn" class="text-indigo-600 hover:underline font-semibold">Criar conta</button>
+        </div>
+
+        <!-- Mensagem de erro -->
         <div id="errorMessage" class="mt-4 text-center text-red-600 text-sm hidden"></div>
+
+        <!-- Formulário de Registo (inicialmente oculto) -->
+        <div id="registerForm" class="mt-6 hidden">
+            <hr class="mb-6">
+            <h2 class="text-xl font-bold text-gray-700 text-center mb-4">Criar nova conta</h2>
+            <form id="registerFormSubmit">
+                <div class="mb-4">
+                    <label for="regUsername" class="block text-gray-700 font-medium mb-2">Usuário</label>
+                    <input type="text" id="regUsername" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="regPassword" class="block text-gray-700 font-medium mb-2">Senha</label>
+                    <input type="password" id="regPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="regEmail" class="block text-gray-700 font-medium mb-2">Email (opcional)</label>
+                    <input type="email" id="regEmail" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-semibold">Registar</button>
+            </form>
+            <div id="registerMessage" class="mt-2 text-center text-sm hidden"></div>
+            <div class="mt-3 text-center">
+                <button id="backToLoginBtn" class="text-gray-500 hover:underline">← Voltar ao login</button>
+            </div>
+        </div>
     </div>
+
     <script>
         const API_BASE = 'http://localhost:5000/api';
-        const form = document.getElementById('loginForm');
+
+        // Elementos
+        const loginForm = document.getElementById('loginForm');
         const errorDiv = document.getElementById('errorMessage');
-        form.addEventListener('submit', async (e) => {
+        const registerForm = document.getElementById('registerForm');
+        const showRegisterBtn = document.getElementById('showRegisterBtn');
+        const backToLoginBtn = document.getElementById('backToLoginBtn');
+        const registerFormSubmit = document.getElementById('registerFormSubmit');
+        const registerMessage = document.getElementById('registerMessage');
+
+        // Mostrar formulário de registo
+        showRegisterBtn.addEventListener('click', () => {
+            loginForm.style.display = 'none';
+            registerForm.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            registerMessage.classList.add('hidden');
+        });
+
+        // Voltar ao login
+        backToLoginBtn.addEventListener('click', () => {
+            loginForm.style.display = 'block';
+            registerForm.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+            registerMessage.classList.add('hidden');
+        });
+
+        // ----- LOGIN -----
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             errorDiv.classList.add('hidden');
             try {
-                const res = await fetch(`${API_BASE}/login`, {
+                const res = await fetch(`${API_BASE}/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
@@ -43,8 +104,8 @@
                 const data = await res.json();
                 if (res.ok && data.success) {
                     localStorage.setItem('admin_token', data.token);
-                    localStorage.setItem('admin_user', data.user);
-                    window.location.href = '/admin.html';
+                    localStorage.setItem('admin_user', data.user.username);
+                    window.location.href = '/index.html';
                 } else {
                     errorDiv.textContent = data.error || 'Falha no login';
                     errorDiv.classList.remove('hidden');
@@ -52,6 +113,58 @@
             } catch (err) {
                 errorDiv.textContent = 'Erro de conexão com o servidor';
                 errorDiv.classList.remove('hidden');
+            }
+        });
+
+        // ----- REGISTO -----
+        registerFormSubmit.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('regUsername').value;
+            const password = document.getElementById('regPassword').value;
+            const email = document.getElementById('regEmail').value;
+
+            registerMessage.classList.add('hidden');
+            registerMessage.className = 'mt-2 text-center text-sm';
+
+            if (!username || !password) {
+                registerMessage.textContent = 'Usuário e senha são obrigatórios';
+                registerMessage.classList.add('text-red-600');
+                registerMessage.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, email })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    registerMessage.textContent = `✅ Conta criada com sucesso! Faça login.`;
+                    registerMessage.classList.add('text-green-600');
+                    registerMessage.classList.remove('hidden');
+                    // Limpar campos
+                    document.getElementById('regUsername').value = '';
+                    document.getElementById('regPassword').value = '';
+                    document.getElementById('regEmail').value = '';
+                    // Voltar ao login após 2 segundos
+                    setTimeout(() => {
+                        loginForm.style.display = 'block';
+                        registerForm.classList.add('hidden');
+                        registerMessage.classList.add('hidden');
+                        // Preencher usuário
+                        document.getElementById('username').value = username;
+                    }, 2000);
+                } else {
+                    registerMessage.textContent = data.error || 'Erro ao criar conta';
+                    registerMessage.classList.add('text-red-600');
+                    registerMessage.classList.remove('hidden');
+                }
+            } catch (err) {
+                registerMessage.textContent = 'Erro de conexão com o servidor';
+                registerMessage.classList.add('text-red-600');
+                registerMessage.classList.remove('hidden');
             }
         });
     </script>
