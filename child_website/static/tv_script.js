@@ -1,5 +1,5 @@
 // ============================================================
-// JAVASCRIPT - PÁGINA PRINCIPAL
+// JAVASCRIPT COMPLETO
 // ============================================================
 
 // ============================================================
@@ -12,7 +12,15 @@ const API_BASE = "http://127.0.0.1:5000";
 // ============================================================
 let CODIGO_TV = null;
 let intervaloPolling = null;
-let playerAberto = false;
+let reprodutorAtivo = false;
+let itemsPlaylist = [];
+let indiceAtual = 0;
+let temporizadorAtual = null;
+let elementoVideoAtual = null;
+let estaEmFullscreen = false;
+let fullscreenContainer = null;
+let temporizadorMouse = null;
+let playerAtivo = false; // Controla se o player está ativo
 
 // ============================================================
 // 3. FUNÇÃO PARA GERAR ID ÚNICO DO DISPOSITIVO
@@ -133,40 +141,400 @@ async function buscarPlaylist() {
 }
 
 // ============================================================
-// 5. FUNÇÃO PARA ABRIR PLAYER
+// 5. FUNÇÃO PARA ATIVAR O PLAYER (quando o código for inserido)
 // ============================================================
 
-function abrirPlayer() {
-    if (playerAberto) return;
+function ativarPlayer() {
+    console.log("Ativando player...");
+    playerAtivo = true;
     
-    // Abrir a página do player em uma nova janela
-    const playerWindow = window.open('player.html', '_blank', 'fullscreen=yes, menubar=no, toolbar=no, location=no, status=no, scrollbars=no');
+    // Esconder a tela inicial (código)
+    const appRoot = document.getElementById('appRoot');
+    if (appRoot) {
+        appRoot.style.display = 'none';
+    }
     
-    if (playerWindow) {
-        playerAberto = true;
-        console.log("Player aberto com sucesso!");
-        
-        // Enviar o código para o player
-        setTimeout(() => {
-            playerWindow.postMessage({
-                type: 'CODIGO_TV',
-                codigo: CODIGO_TV
-            }, '*');
-        }, 1000);
-        
-        // Desabilitar o botão
-        const btn = document.getElementById('btnAbrirPlayer');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = '🎬 Player Aberto';
+    // Mostrar o player
+    const playerContainer = document.getElementById('playerContainer');
+    if (playerContainer) {
+        playerContainer.classList.add('active');
+    }
+    
+    // Iniciar a reprodução
+    atualizarPlaylist();
+    
+    // Iniciar polling
+    if (intervaloPolling) clearInterval(intervaloPolling);
+    intervaloPolling = setInterval(atualizarPlaylist, 30000);
+}
+
+// ============================================================
+// 6. FUNÇÃO PARA VOLTAR À TELA INICIAL
+// ============================================================
+
+function voltarTelaInicial() {
+    console.log("Voltando à tela inicial...");
+    playerAtivo = false;
+    
+    // Parar reprodução
+    pararReproducao();
+    
+    // Sair do fullscreen
+    if (estaEmFullscreen) {
+        sairFullscreen();
+    }
+    
+    // Esconder o player
+    const playerContainer = document.getElementById('playerContainer');
+    if (playerContainer) {
+        playerContainer.classList.remove('active');
+        playerContainer.innerHTML = '';
+    }
+    
+    // Mostrar a tela inicial (código)
+    const appRoot = document.getElementById('appRoot');
+    if (appRoot) {
+        appRoot.style.display = 'block';
+    }
+    
+    // Parar polling
+    if (intervaloPolling) {
+        clearInterval(intervaloPolling);
+        intervaloPolling = null;
+    }
+    
+    // Recarregar a UI com o código
+    renderizarUI(null, "Aguardando nova playlist...");
+}
+
+// ============================================================
+// 7. FUNÇÕES DE FULLSCREEN - TELA CHEIA TOTAL
+// ============================================================
+
+function entrarFullscreen(elemento) {
+    if (estaEmFullscreen) {
+        const container = document.getElementById('fullscreenContainer');
+        if (container) {
+            const oldContent = container.querySelector('video, img, .no-media-fullscreen');
+            if (oldContent) oldContent.remove();
+            
+            const clone = elemento.cloneNode(true);
+            clone.style.width = '100vw';
+            clone.style.height = '100vh';
+            clone.style.objectFit = 'cover';
+            clone.style.display = 'block';
+            clone.style.background = '#000';
+            clone.style.borderRadius = '0';
+            container.insertBefore(clone, container.firstChild);
+            
+            if (clone.tagName === 'VIDEO') {
+                clone.play().catch(e => console.log("Erro ao dar play:", e));
+            }
         }
-    } else {
-        alert('Por favor, permita pop-ups para abrir o player.');
+        return;
+    }
+
+    const container = document.createElement('div');
+    container.className = 'fullscreen-mode';
+    container.id = 'fullscreenContainer';
+    container.style.padding = '0';
+    container.style.margin = '0';
+    container.style.overflow = 'hidden';
+    
+    const clone = elemento.cloneNode(true);
+    
+    clone.style.width = '100vw';
+    clone.style.height = '100vh';
+    clone.style.objectFit = 'cover';
+    clone.style.display = 'block';
+    clone.style.background = '#000';
+    clone.style.borderRadius = '0';
+    
+    container.appendChild(clone);
+    
+    // Botão Sair
+    const exitBtn = document.createElement('button');
+    exitBtn.className = 'exit-fullscreen-btn';
+    exitBtn.id = 'exitFullscreenBtn';
+    exitBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:white;">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+        Sair da Tela Cheia
+    `;
+    exitBtn.onclick = function() {
+        sairFullscreen();
+        // Voltar à tela inicial quando sair do fullscreen
+        voltarTelaInicial();
+    };
+    container.appendChild(exitBtn);
+    
+    // Controles
+    const controls = document.createElement('div');
+    controls.className = 'fullscreen-controls';
+    controls.id = 'fullscreenControls';
+    controls.innerHTML = `
+        <button onclick="pauseResume()">⏸️ Pausar/Retomar</button>
+        <button onclick="proximoItem()">⏭️ Próximo</button>
+    `;
+    container.appendChild(controls);
+    
+    // Adicionar ao player container
+    const playerContainer = document.getElementById('playerContainer');
+    if (playerContainer) {
+        playerContainer.innerHTML = '';
+        playerContainer.appendChild(container);
+    }
+    
+    if (container.requestFullscreen) {
+        container.requestFullscreen({
+            navigationUI: 'hide'
+        }).catch(err => {
+            console.log("Erro ao entrar em fullscreen:", err);
+        });
+    }
+    
+    estaEmFullscreen = true;
+    fullscreenContainer = container;
+    
+    container.addEventListener('mousemove', mostrarControles);
+    container.addEventListener('mouseleave', ocultarControles);
+    
+    const video = container.querySelector('video');
+    if (video) {
+        video.play().catch(e => console.log("Erro ao dar play em fullscreen:", e));
+    }
+}
+
+function sairFullscreen() {
+    if (document.fullscreenElement) {
+        document.exitFullscreen().catch(err => {
+            console.log("Erro ao sair do fullscreen:", err);
+        });
+    }
+    
+    const container = document.getElementById('fullscreenContainer');
+    if (container) {
+        container.removeEventListener('mousemove', mostrarControles);
+        container.removeEventListener('mouseleave', ocultarControles);
+    }
+    
+    estaEmFullscreen = false;
+    fullscreenContainer = null;
+    
+    if (temporizadorMouse) {
+        clearTimeout(temporizadorMouse);
+        temporizadorMouse = null;
     }
 }
 
 // ============================================================
-// 6. FUNÇÕES DE UI
+// 8. FUNÇÕES DE CONTROLE DO MOUSE
+// ============================================================
+
+function mostrarControles() {
+    const exitBtn = document.getElementById('exitFullscreenBtn');
+    const controls = document.getElementById('fullscreenControls');
+    
+    if (exitBtn) exitBtn.classList.add('visible');
+    if (controls) controls.classList.add('visible');
+    
+    if (temporizadorMouse) {
+        clearTimeout(temporizadorMouse);
+        temporizadorMouse = null;
+    }
+    
+    temporizadorMouse = setTimeout(() => {
+        ocultarControles();
+    }, 3000);
+}
+
+function ocultarControles() {
+    const exitBtn = document.getElementById('exitFullscreenBtn');
+    const controls = document.getElementById('fullscreenControls');
+    
+    if (exitBtn) exitBtn.classList.remove('visible');
+    if (controls) controls.classList.remove('visible');
+    
+    if (temporizadorMouse) {
+        clearTimeout(temporizadorMouse);
+        temporizadorMouse = null;
+    }
+}
+
+function pauseResume() {
+    const container = document.getElementById('fullscreenContainer');
+    if (!container) return;
+    
+    const video = container.querySelector('video');
+    if (video) {
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
+        }
+    }
+    mostrarControles();
+}
+
+function proximoItem() {
+    if (temporizadorAtual) {
+        clearTimeout(temporizadorAtual);
+        temporizadorAtual = null;
+    }
+    
+    if (reprodutorAtivo) {
+        if (indiceAtual >= itemsPlaylist.length) {
+            indiceAtual = 0;
+        }
+        const item = itemsPlaylist[indiceAtual];
+        indiceAtual++;
+        const container = document.getElementById('fullscreenContainer');
+        if (container) {
+            reproduzirItem(item, () => {
+                if (reprodutorAtivo) {
+                    setTimeout(() => {
+                        if (indiceAtual >= itemsPlaylist.length) {
+                            indiceAtual = 0;
+                        }
+                        const nextItem = itemsPlaylist[indiceAtual];
+                        indiceAtual++;
+                        reproduzirItem(nextItem, arguments.callee);
+                    }, 100);
+                }
+            });
+        }
+    }
+    mostrarControles();
+}
+
+// ============================================================
+// 9. FUNÇÕES DE REPRODUÇÃO
+// ============================================================
+
+function pararReproducao() {
+    if (temporizadorAtual) {
+        clearTimeout(temporizadorAtual);
+        temporizadorAtual = null;
+    }
+    if (elementoVideoAtual) {
+        elementoVideoAtual.pause();
+        elementoVideoAtual = null;
+    }
+    reprodutorAtivo = false;
+}
+
+function reproduzirItem(item, onTerminar) {
+    const container = document.getElementById('fullscreenContainer');
+    if (!container) {
+        // Se não houver container, criar um
+        const playerContainer = document.getElementById('playerContainer');
+        if (playerContainer) {
+            const newContainer = document.createElement('div');
+            newContainer.className = 'fullscreen-mode';
+            newContainer.id = 'fullscreenContainer';
+            playerContainer.appendChild(newContainer);
+            entrarFullscreen(document.createElement('div'));
+        }
+        return;
+    }
+    
+    const url = item.url;
+    const mimeType = item.mime_type || '';
+    const isVideo = mimeType.startsWith('video/') || url.match(/\.(mp4|webm|mov|avi)$/i);
+    const isImage = mimeType.startsWith('image/') || url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+    
+    if (isVideo) {
+        const video = document.createElement('video');
+        video.src = `${API_BASE}${encodeURI(url)}`;
+        video.autoplay = true;
+        video.controls = false;
+        
+        video.onloadeddata = () => {
+            entrarFullscreen(video);
+        };
+        
+        video.onended = () => {
+            elementoVideoAtual = null;
+            onTerminar();
+        };
+        video.onerror = () => {
+            console.error("Erro ao reproduzir vídeo");
+            elementoVideoAtual = null;
+            onTerminar();
+        };
+        
+        // Remover conteúdo antigo
+        const oldContent = container.querySelector('video, img, .no-media-fullscreen');
+        if (oldContent) oldContent.remove();
+        
+        container.appendChild(video);
+        elementoVideoAtual = video;
+        video.play().catch(e => console.error("Erro ao dar play:", e));
+    } 
+    else if (isImage) {
+        const img = document.createElement('img');
+        img.src = `${API_BASE}${url}`;
+        img.alt = "Imagem";
+        
+        img.onload = () => {
+            entrarFullscreen(img);
+        };
+        
+        const oldContent = container.querySelector('video, img, .no-media-fullscreen');
+        if (oldContent) oldContent.remove();
+        
+        container.appendChild(img);
+        
+        const duracao = (item.duration_seconds || 10) * 1000;
+        temporizadorAtual = setTimeout(() => {
+            temporizadorAtual = null;
+            onTerminar();
+        }, duracao);
+    }
+    else {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'no-media-fullscreen';
+        msgDiv.textContent = `📺 ${item.name || 'Conteúdo indisponível'}`;
+        entrarFullscreen(msgDiv);
+        
+        setTimeout(() => {
+            onTerminar();
+        }, 3000);
+    }
+}
+
+function iniciarLoop(playlistItems) {
+    pararReproducao();
+    
+    if (!playlistItems || playlistItems.length === 0) {
+        return;
+    }
+    
+    itemsPlaylist = playlistItems;
+    indiceAtual = 0;
+    reprodutorAtivo = true;
+    
+    function avancar() {
+        if (!reprodutorAtivo) return;
+        
+        if (indiceAtual >= itemsPlaylist.length) {
+            indiceAtual = 0;
+        }
+        
+        const item = itemsPlaylist[indiceAtual];
+        indiceAtual++;
+        
+        reproduzirItem(item, () => {
+            avancar();
+        });
+    }
+    
+    avancar();
+}
+
+// ============================================================
+// 10. FUNÇÕES DE UI
 // ============================================================
 
 function renderizarUI(playlist, statusMensagem) {
@@ -181,7 +549,7 @@ function renderizarUI(playlist, statusMensagem) {
             <div>
                 <div class="fixed-code-badge">📺 CÓDIGO DE EMPARELHAMENTO</div>
                 <h2 style="color:#ffd9a5; margin-top: 5px;">MODO TV</h2>
-                <p style="color:#bbccff; margin-bottom: 5px;">Usa o código abaixo para emparelhar esta TV</p>
+                <p style="color:#bbccff; margin-bottom: 5px;">Insira o código abaixo para iniciar a reprodução</p>
                 <div class="tv-code-box">
                     <div class="code-digit">${CODIGO_TV}</div>
                 </div>
@@ -189,15 +557,12 @@ function renderizarUI(playlist, statusMensagem) {
                     ID do dispositivo: ${deviceId.substring(0, 15)}...
                 </div>
                 <div class="tv-status" id="tvStatusMsg">
-                    ${statusMensagem || (temPlaylist ? `Playlist disponível!` : 'A aguardar pela playlist...')}
+                    ${statusMensagem || (temPlaylist ? '✅ Playlist disponível! Clique em "INICIAR" para começar' : '⏳ Aguardando playlist...')}
                 </div>
                 ${temPlaylist ? `
-                    <button id="btnAbrirPlayer" class="btn-abrir-player" onclick="abrirPlayer()">
-                        🎬 ABRIR PLAYER
+                    <button class="btn-simular-codigo" onclick="ativarPlayer()">
+                        🎬 INICIAR REPRODUÇÃO
                     </button>
-                    <p style="color: #8899bb; font-size: 0.9rem; margin-top: 10px;">
-                        Clique para abrir a reprodução em tela cheia
-                    </p>
                 ` : `
                     <p style="color: #8899bb; font-size: 0.9rem; margin-top: 20px;">
                         Aguardando atribuição de playlist...
@@ -209,21 +574,35 @@ function renderizarUI(playlist, statusMensagem) {
 }
 
 // ============================================================
-// 7. FUNÇÃO PRINCIPAL - POLLING
+// 11. FUNÇÃO PRINCIPAL - POLLING
 // ============================================================
 
 async function atualizarPlaylist() {
+    if (!playerAtivo) {
+        // Se o player não estiver ativo, apenas verifica se há playlist
+        const playlist = await buscarPlaylist();
+        if (playlist && playlist.items && playlist.items.length > 0) {
+            renderizarUI(playlist, '✅ Playlist disponível! Clique em "INICIAR" para começar');
+        } else {
+            renderizarUI(null, '⏳ Aguardando playlist...');
+        }
+        return;
+    }
+    
+    // Se o player estiver ativo, atualiza a reprodução
     const playlist = await buscarPlaylist();
     
     if (playlist && playlist.items && playlist.items.length > 0) {
-        renderizarUI(playlist, `Playlist: ${playlist.name} (${playlist.items.length} itens)`);
+        iniciarLoop(playlist.items);
     } else {
-        renderizarUI(null, "Nenhuma playlist atribuída. A aguardar...");
+        pararReproducao();
+        // Se não houver playlist, voltar à tela inicial
+        voltarTelaInicial();
     }
 }
 
 // ============================================================
-// 8. INICIALIZAÇÃO
+// 12. INICIALIZAÇÃO
 // ============================================================
 
 (async function iniciar() {
@@ -232,11 +611,21 @@ async function atualizarPlaylist() {
     console.log("ID do dispositivo:", obterIdDispositivo());
     
     await registarTV();
+    
+    // Criar container do player (oculto inicialmente)
+    const playerContainer = document.createElement('div');
+    playerContainer.id = 'playerContainer';
+    playerContainer.className = 'player-container';
+    document.body.appendChild(playerContainer);
+    
+    // Renderizar UI inicial
     await atualizarPlaylist();
     
-    if (intervaloPolling) clearInterval(intervaloPolling);
-    intervaloPolling = setInterval(atualizarPlaylist, 30000);
-    
-    // Salvar código no localStorage para o player
-    localStorage.setItem("tv_codigo_player", CODIGO_TV);
+    // Listener para sair do fullscreen com ESC
+    document.addEventListener('fullscreenchange', function() {
+        if (!document.fullscreenElement && estaEmFullscreen) {
+            // Se saiu do fullscreen, voltar à tela inicial
+            voltarTelaInicial();
+        }
+    });
 })();
