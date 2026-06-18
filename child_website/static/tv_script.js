@@ -136,13 +136,7 @@ async function registarTV() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ codigo, device_id: deviceId })
         });
-<<<<<<< HEAD
         return await response.json();
-=======
-        const data = await response.json();
-        console.log("TV registada no backend:", data);
-        return data;
->>>>>>> 1e2fa8b5748b44f3efbffc4cfab665757c198a58
     } catch (error) {
         console.error("Erro ao registar TV:", error);
         return null;

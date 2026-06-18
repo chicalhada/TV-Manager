@@ -41,7 +41,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 upload_folder = 'uploads/'
 os.makedirs(upload_folder, exist_ok=True)
 
-JWT_SECRET = "tvmanager_secret_key_2026"
+JWT_SECRET = "tvmanager_secret_key_2026_secure_32bytes" 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -149,25 +149,25 @@ def register_tv():
 def get_playlists():
     playlists = list_playlists()
     for p in playlists:
-        p['items'] = get_playlist_items(p['id'])   # ADICIONA OS ITENS
+        p['items'] = get_playlist_items(p['id'])   
     return jsonify(playlists)
 
-from db import add_playlist   # mantém a importação
+
 
 @app.route("/api/playlists", methods=["POST"])
 @login_required
-def create_playlist():        # nome diferente
+def create_playlist():        
     data = request.get_json()
     if not data or not data.get("name"):
         return jsonify({"error": "Nome da playlist é obrigatório"}), 400
-    playlist_id = add_playlist(data["name"])   # agora chama a do db
+    playlist_id = add_playlist(data["name"]) 
     playlist_items = get_playlist_items(playlist_id)
     playlist = {"id": playlist_id, "name": data["name"], "items": playlist_items}
     return jsonify(playlist), 201
 
 @app.route("/api/playlists/<int:playlist_id>", methods=["GET"])
 @login_required
-def get_playlist(playlist_id):
+def get_playlist_detail(playlist_id):
     items = get_playlist_items(playlist_id)
     if items is None:
         return jsonify({"error": "Playlist não encontrada"}), 404
@@ -441,7 +441,6 @@ def delete_user(user_id):
 @app.route('/api/assign', methods=['GET'])
 @login_required
 def get_assignments():
-    from db import list_child_sites, get_assignment_for_tv, get_playlist
     sites = list_child_sites()
     result = []
     for site in sites:
