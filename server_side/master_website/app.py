@@ -10,6 +10,7 @@ import bcrypt
 import jwt
 from functools import wraps
 from datetime import datetime, timedelta
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from db import (
     add_child_site,
     list_child_sites,
@@ -35,6 +36,7 @@ from db import (
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 upload_folder = 'uploads/'
 os.makedirs(upload_folder, exist_ok=True)
@@ -239,7 +241,16 @@ def assign_playlist():
         return jsonify({"error": "TV não encontrada"}), 404
     
     assign_playlist_to_tv(child_site["id"], playlist_id)
+
+    socketio.emit('playlist_updated', {
+    'child_site_codigo': child_site_codigo,
+    'playlist_id': playlist_id
+    }, room=child_site_codigo)
+
+
     return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
+
+
 
 @app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
 def get_child_playlist(child_site_codigo):
@@ -434,5 +445,26 @@ def get_assignments():
 
 ###############################################################################################################
 
+@socketio.on('connect')
+def handle_connect():
+    print(f"Cliente conectado: {request.sid}")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print(f"Cliente desconectado: {request.sid}")
+
+@socketio.on('register_tv')
+def handle_register_tv(data):
+    codigo = data.get('codigo')
+    if codigo:
+        join_room(codigo)
+        print(f"TV {codigo} registada na sala {codigo}")
+        emit('registered', {'status': 'ok', 'codigo': codigo}, room=request.sid)
+
+
+################################################################################################################
+
+
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)

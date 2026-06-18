@@ -7,6 +7,35 @@
 // ============================================================
 const API_BASE = "http://127.0.0.1:5000";
 
+
+// ============================================================
+// WEBSOCKET
+// ============================================================
+const socket = io('http://127.0.0.1:5000', {
+    transports: ['websocket', 'polling']
+});
+
+socket.on('connect', function() {
+    console.log('Conectado ao servidor WebSocket');
+});
+
+socket.on('disconnect', function() {
+    console.log('Desconectado do servidor WebSocket');
+});
+
+socket.on('registered', function(data) {
+    console.log('TV registada no WebSocket:', data);
+});
+
+socket.on('playlist_updated', function(data) {
+    console.log('Playlist atualizada!', data);
+    // Forçar atualização imediata
+    atualizarPlaylist();
+});
+
+
+
+
 // ============================================================
 // 2. VARIÁVEIS GLOBAIS
 // ============================================================
@@ -188,6 +217,7 @@ async function obterOuCriarCodigo() {
 
 async function registarTV() {
     try {
+        socket.emit('register_tv', { codigo: CODIGO_TV });
         const deviceId = obterIdDispositivo();
         const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
         
@@ -200,10 +230,10 @@ async function registarTV() {
             })
         });
         const data = await response.json();
-        console.log("📡 TV registada no backend:", data);
+        console.log("TV registada no backend:", data);
         return data;
     } catch (error) {
-        console.error("❌ Erro ao registar TV:", error);
+        console.error("Erro ao registar TV:", error);
         return null;
     }
 }
@@ -252,7 +282,7 @@ function ativarPlayer() {
     atualizarPlaylist();
     
     if (intervaloPolling) clearInterval(intervaloPolling);
-    intervaloPolling = setInterval(atualizarPlaylist, 30000);
+    intervaloPolling = setInterval(atualizarPlaylist, 60000);
 }
 
 // ============================================================
