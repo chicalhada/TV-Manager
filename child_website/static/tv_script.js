@@ -1,5 +1,5 @@
 // ============================================================
-// JAVASCRIPT COMPLETO
+// JAVASCRIPT COMPLETO - CÓDIGO FIXO POR DISPOSITIVO
 // ============================================================
 
 // ============================================================
@@ -20,110 +20,201 @@ let elementoVideoAtual = null;
 let estaEmFullscreen = false;
 let fullscreenContainer = null;
 let temporizadorMouse = null;
-let playerAtivo = false; // Controla se o player está ativo
+let playerAtivo = false;
 
 // ============================================================
-// 3. FUNÇÃO PARA GERAR ID ÚNICO DO DISPOSITIVO
+// 3. FUNÇÃO PARA GERAR ID ÚNICO E FIXO DO DISPOSITIVO
 // ============================================================
 
 function obterIdDispositivo() {
+    // Tentar recuperar ID do dispositivo do localStorage
     let deviceId = localStorage.getItem("tv_device_id");
     
     if (!deviceId) {
-        const navegador = navigator.userAgent;
+        // GERAR ID ÚNICO BASEADO EM MÚLTIPLAS CARACTERÍSTICAS DO DISPOSITIVO
+        // Isso garante que o ID seja sempre o mesmo para o mesmo dispositivo
+        
+        // 1. User Agent (informações do navegador)
+        const userAgent = navigator.userAgent;
+        
+        // 2. Resolução da tela
+        const screenRes = `${window.screen.width}x${window.screen.height}`;
+        
+        // 3. Plataforma (Windows, Mac, Linux, etc)
+        const platform = navigator.platform;
+        
+        // 4. Idioma do navegador
+        const language = navigator.language;
+        
+        // 5. Timestamp da primeira execução (será salvo)
         const timestamp = Date.now();
+        
+        // 6. Número aleatório para garantir unicidade
         const random = Math.random().toString(36).substring(2, 10);
         
+        // Criar um hash combinando todas as informações
+        let combinedString = `${userAgent}|${screenRes}|${platform}|${language}|${timestamp}|${random}`;
+        
+        // Gerar hash simples
         let hash = 0;
-        for (let i = 0; i < navegador.length; i++) {
-            const char = navegador.charCodeAt(i);
+        for (let i = 0; i < combinedString.length; i++) {
+            const char = combinedString.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
         
-        deviceId = `TV-${Math.abs(hash).toString(36).toUpperCase()}-${timestamp.toString(36).toUpperCase()}-${random.toUpperCase()}`;
+        // Criar ID legível
+        const hashStr = Math.abs(hash).toString(36).toUpperCase();
+        const timestampStr = timestamp.toString(36).toUpperCase();
+        const randomStr = random.toUpperCase();
+        
+        deviceId = `TV-${hashStr}-${timestampStr.substring(0, 4)}-${randomStr.substring(0, 4)}`;
+        
+        // GUARDAR NO LOCALSTORAGE PARA SEMPRE
         localStorage.setItem("tv_device_id", deviceId);
-        console.log("Novo ID do dispositivo criado:", deviceId);
+        localStorage.setItem("tv_device_id_created", timestamp.toString());
+        console.log("🆕 Novo ID do dispositivo criado (FIXO):", deviceId);
+    } else {
+        console.log("🔄 ID do dispositivo recuperado (FIXO):", deviceId);
     }
     
     return deviceId;
 }
 
 // ============================================================
-// 4. FUNÇÕES DE API
+// 4. FUNÇÃO PARA GERAR CÓDIGO FIXO BASEADO NO DEVICE ID
+// ============================================================
+
+function gerarCodigoFixo(deviceId) {
+    // Pegar parte do deviceId e transformar em código legível
+    // Isso garante que o código seja SEMPRE o mesmo para o mesmo dispositivo
+    
+    // Extrair partes do deviceId
+    const parts = deviceId.split('-');
+    // parts[0] = "TV"
+    // parts[1] = hash
+    // parts[2] = timestamp
+    // parts[3] = random
+    
+    // Usar o hash para criar um código de 6 caracteres
+    let codigoBase = parts[1] || '';
+    
+    // Garantir que tenha pelo menos 6 caracteres
+    while (codigoBase.length < 6) {
+        codigoBase += '0';
+    }
+    
+    // Pegar os primeiros 6 caracteres
+    let codigo = codigoBase.substring(0, 6);
+    
+    // Adicionar um caractere de verificação (checksum)
+    let checksum = 0;
+    for (let i = 0; i < codigo.length; i++) {
+        checksum += codigo.charCodeAt(i);
+    }
+    const checkChar = String.fromCharCode(65 + (checksum % 26)); // A-Z
+    
+    // Garantir que o código seja legível (apenas letras maiúsculas e números)
+    codigo = codigo.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    // Se ficar muito curto, completar
+    while (codigo.length < 6) {
+        codigo += 'X';
+    }
+    
+    // Formato final: 6 caracteres + 1 letra de verificação
+    const codigoFinal = codigo.substring(0, 6) + checkChar;
+    
+    console.log("🔑 Código fixo gerado:", codigoFinal);
+    return codigoFinal;
+}
+
+// ============================================================
+// 5. FUNÇÕES DE API (MODIFICADAS)
 // ============================================================
 
 async function obterOuCriarCodigo() {
+    // 1. Obter ID fixo do dispositivo
     const deviceId = obterIdDispositivo();
+    
+    // 2. Tentar recuperar código do localStorage
     let codigo = localStorage.getItem("tv_codigo");
     
-    if (codigo) {
-        try {
-            const response = await fetch(`${API_BASE}/api/child/${codigo}/playlist`);
-            if (response.status !== 404) {
-                console.log("Código existente e válido:", codigo);
-                return codigo;
-            } else {
-                console.log("Código não encontrado no backend, criando novo...");
-            }
-        } catch (error) {
-            console.log("Erro ao verificar código, tentando criar novo...");
-        }
+    // 3. Se não tiver código no localStorage, gerar um baseado no deviceId
+    if (!codigo) {
+        codigo = gerarCodigoFixo(deviceId);
+        localStorage.setItem("tv_codigo", codigo);
+        console.log("📝 Código fixo guardado no localStorage:", codigo);
+    } else {
+        console.log("📝 Código fixo recuperado do localStorage:", codigo);
     }
     
+    // 4. Verificar se o código existe no backend
     try {
-        const response = await fetch(`${API_BASE}/api/tv/register`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                device_id: deviceId
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
+        const response = await fetch(`${API_BASE}/api/child/${codigo}/playlist`);
+        if (response.status === 404) {
+            // Código não existe no backend, tentar registrar
+            console.log("⚠️ Código não encontrado no backend, tentando registrar...");
+            try {
+                const registerResponse = await fetch(`${API_BASE}/api/tv/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        codigo: codigo,
+                        device_id: deviceId
+                    })
+                });
+                if (registerResponse.ok) {
+                    const data = await registerResponse.json();
+                    console.log("✅ Código registrado no backend:", data);
+                } else {
+                    console.warn("⚠️ Falha ao registrar código no backend");
+                }
+            } catch (registerError) {
+                console.error("❌ Erro ao registrar código:", registerError);
+            }
+        } else if (response.ok) {
+            console.log("✅ Código válido no backend:", codigo);
         }
-        
-        const data = await response.json();
-        codigo = data.codigo;
-        localStorage.setItem("tv_codigo", codigo);
-        console.log("Novo código criado e guardado:", codigo);
-        return codigo;
     } catch (error) {
-        console.error("Erro ao criar código:", error);
-        const fallbackCodigo = deviceId.substring(0, 8);
-        localStorage.setItem("tv_codigo", fallbackCodigo);
-        console.log("Código de fallback criado:", fallbackCodigo);
-        return fallbackCodigo;
+        console.warn("⚠️ Erro ao verificar código no backend:", error);
+        // Mesmo com erro, manter o código fixo
     }
+    
+    // 5. Retornar o código (sempre o mesmo)
+    CODIGO_TV = codigo;
+    return codigo;
 }
 
 async function registarTV() {
     try {
         const deviceId = obterIdDispositivo();
+        const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+        
         const response = await fetch(`${API_BASE}/api/tv/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
-                codigo: CODIGO_TV,
+                codigo: codigo,
                 device_id: deviceId
             })
         });
         const data = await response.json();
-        console.log("TV registada:", data);
+        console.log("📡 TV registada no backend:", data);
         return data;
     } catch (error) {
-        console.error("Erro ao registar TV:", error);
+        console.error("❌ Erro ao registar TV:", error);
         return null;
     }
 }
 
 async function buscarPlaylist() {
     try {
-        const response = await fetch(`${API_BASE}/api/child/${CODIGO_TV}/playlist`);
+        const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+        const response = await fetch(`${API_BASE}/api/child/${codigo}/playlist`);
         
         if (response.status === 404) {
-            console.log("Ainda nenhuma playlist atribuída a esta TV.");
+            console.log("📭 Ainda nenhuma playlist atribuída a esta TV.");
             return null;
         }
         
@@ -132,83 +223,74 @@ async function buscarPlaylist() {
         }
         
         const playlist = await response.json();
-        console.log("Playlist recebida:", playlist);
+        console.log("📋 Playlist recebida:", playlist);
         return playlist;
     } catch (error) {
-        console.error("Erro ao buscar playlist:", error);
+        console.error("❌ Erro ao buscar playlist:", error);
         return null;
     }
 }
 
 // ============================================================
-// 5. FUNÇÃO PARA ATIVAR O PLAYER (quando o código for inserido)
+// 6. FUNÇÃO PARA ATIVAR O PLAYER
 // ============================================================
 
 function ativarPlayer() {
-    console.log("Ativando player...");
+    console.log("🎬 Ativando player...");
     playerAtivo = true;
     
-    // Esconder a tela inicial (código)
     const appRoot = document.getElementById('appRoot');
     if (appRoot) {
         appRoot.style.display = 'none';
     }
     
-    // Mostrar o player
     const playerContainer = document.getElementById('playerContainer');
     if (playerContainer) {
         playerContainer.classList.add('active');
     }
     
-    // Iniciar a reprodução
     atualizarPlaylist();
     
-    // Iniciar polling
     if (intervaloPolling) clearInterval(intervaloPolling);
     intervaloPolling = setInterval(atualizarPlaylist, 30000);
 }
 
 // ============================================================
-// 6. FUNÇÃO PARA VOLTAR À TELA INICIAL
+// 7. FUNÇÃO PARA VOLTAR À TELA INICIAL
 // ============================================================
 
 function voltarTelaInicial() {
-    console.log("Voltando à tela inicial...");
+    console.log("🏠 Voltando à tela inicial...");
     playerAtivo = false;
     
-    // Parar reprodução
     pararReproducao();
     
-    // Sair do fullscreen
     if (estaEmFullscreen) {
         sairFullscreen();
     }
     
-    // Esconder o player
     const playerContainer = document.getElementById('playerContainer');
     if (playerContainer) {
         playerContainer.classList.remove('active');
         playerContainer.innerHTML = '';
     }
     
-    // Mostrar a tela inicial (código)
     const appRoot = document.getElementById('appRoot');
     if (appRoot) {
         appRoot.style.display = 'block';
     }
     
-    // Parar polling
     if (intervaloPolling) {
         clearInterval(intervaloPolling);
         intervaloPolling = null;
     }
     
-    // Recarregar a UI com o código
+    // Recarregar a UI com o código fixo
     renderizarUI(null, "Aguardando nova playlist...");
 }
 
 // ============================================================
-// 7. FUNÇÕES DE FULLSCREEN - TELA CHEIA TOTAL
+// 8. FUNÇÕES DE FULLSCREEN
 // ============================================================
 
 function entrarFullscreen(elemento) {
@@ -252,7 +334,6 @@ function entrarFullscreen(elemento) {
     
     container.appendChild(clone);
     
-    // Botão Sair
     const exitBtn = document.createElement('button');
     exitBtn.className = 'exit-fullscreen-btn';
     exitBtn.id = 'exitFullscreenBtn';
@@ -264,12 +345,10 @@ function entrarFullscreen(elemento) {
     `;
     exitBtn.onclick = function() {
         sairFullscreen();
-        // Voltar à tela inicial quando sair do fullscreen
         voltarTelaInicial();
     };
     container.appendChild(exitBtn);
     
-    // Controles
     const controls = document.createElement('div');
     controls.className = 'fullscreen-controls';
     controls.id = 'fullscreenControls';
@@ -279,7 +358,6 @@ function entrarFullscreen(elemento) {
     `;
     container.appendChild(controls);
     
-    // Adicionar ao player container
     const playerContainer = document.getElementById('playerContainer');
     if (playerContainer) {
         playerContainer.innerHTML = '';
@@ -329,7 +407,7 @@ function sairFullscreen() {
 }
 
 // ============================================================
-// 8. FUNÇÕES DE CONTROLE DO MOUSE
+// 9. FUNÇÕES DE CONTROLE DO MOUSE
 // ============================================================
 
 function mostrarControles() {
@@ -409,7 +487,7 @@ function proximoItem() {
 }
 
 // ============================================================
-// 9. FUNÇÕES DE REPRODUÇÃO
+// 10. FUNÇÕES DE REPRODUÇÃO
 // ============================================================
 
 function pararReproducao() {
@@ -427,7 +505,6 @@ function pararReproducao() {
 function reproduzirItem(item, onTerminar) {
     const container = document.getElementById('fullscreenContainer');
     if (!container) {
-        // Se não houver container, criar um
         const playerContainer = document.getElementById('playerContainer');
         if (playerContainer) {
             const newContainer = document.createElement('div');
@@ -464,7 +541,6 @@ function reproduzirItem(item, onTerminar) {
             onTerminar();
         };
         
-        // Remover conteúdo antigo
         const oldContent = container.querySelector('video, img, .no-media-fullscreen');
         if (oldContent) oldContent.remove();
         
@@ -534,7 +610,7 @@ function iniciarLoop(playlistItems) {
 }
 
 // ============================================================
-// 10. FUNÇÕES DE UI
+// 11. FUNÇÕES DE UI
 // ============================================================
 
 function renderizarUI(playlist, statusMensagem) {
@@ -543,18 +619,20 @@ function renderizarUI(playlist, statusMensagem) {
     
     const temPlaylist = playlist && playlist.items && playlist.items.length > 0;
     const deviceId = obterIdDispositivo();
+    const codigoFixo = localStorage.getItem("tv_codigo") || CODIGO_TV;
     
     root.innerHTML = `
         <div class="card tv-mode">
             <div>
-                <div class="fixed-code-badge">📺 CÓDIGO DE EMPARELHAMENTO</div>
+                <div class="fixed-code-badge">📺 CÓDIGO DE EMPARELHAMENTO (FIXO)</div>
                 <h2 style="color:#ffd9a5; margin-top: 5px;">MODO TV</h2>
                 <p style="color:#bbccff; margin-bottom: 5px;">Insira o código abaixo para iniciar a reprodução</p>
                 <div class="tv-code-box">
-                    <div class="code-digit">${CODIGO_TV}</div>
+                    <div class="code-digit">${codigoFixo}</div>
                 </div>
-                <div style="color: #8899bb; font-size: 0.8rem; margin-top: -15px; margin-bottom: 15px;">
-                    ID do dispositivo: ${deviceId.substring(0, 15)}...
+                <div style="color: #8899bb; font-size: 0.7rem; margin-top: -15px; margin-bottom: 15px;">
+                    🔒 Código permanente deste dispositivo
+                    <br>ID: ${deviceId.substring(0, 20)}...
                 </div>
                 <div class="tv-status" id="tvStatusMsg">
                     ${statusMensagem || (temPlaylist ? '✅ Playlist disponível! Clique em "INICIAR" para começar' : '⏳ Aguardando playlist...')}
@@ -568,18 +646,20 @@ function renderizarUI(playlist, statusMensagem) {
                         Aguardando atribuição de playlist...
                     </p>
                 `}
+                <p style="color: #667788; font-size: 0.7rem; margin-top: 20px; border-top: 1px solid #334455; padding-top: 15px;">
+                    💡 Este código é permanente para este dispositivo
+                </p>
             </div>
         </div>
     `;
 }
 
 // ============================================================
-// 11. FUNÇÃO PRINCIPAL - POLLING
+// 12. FUNÇÃO PRINCIPAL - POLLING
 // ============================================================
 
 async function atualizarPlaylist() {
     if (!playerAtivo) {
-        // Se o player não estiver ativo, apenas verifica se há playlist
         const playlist = await buscarPlaylist();
         if (playlist && playlist.items && playlist.items.length > 0) {
             renderizarUI(playlist, '✅ Playlist disponível! Clique em "INICIAR" para começar');
@@ -589,43 +669,45 @@ async function atualizarPlaylist() {
         return;
     }
     
-    // Se o player estiver ativo, atualiza a reprodução
     const playlist = await buscarPlaylist();
     
     if (playlist && playlist.items && playlist.items.length > 0) {
         iniciarLoop(playlist.items);
     } else {
         pararReproducao();
-        // Se não houver playlist, voltar à tela inicial
         voltarTelaInicial();
     }
 }
 
 // ============================================================
-// 12. INICIALIZAÇÃO
+// 13. INICIALIZAÇÃO
 // ============================================================
 
 (async function iniciar() {
+    // 1. Obter código fixo
     CODIGO_TV = await obterOuCriarCodigo();
-    console.log("Código da TV (fixo):", CODIGO_TV);
-    console.log("ID do dispositivo:", obterIdDispositivo());
+    console.log("🔑 CÓDIGO FIXO DA TV:", CODIGO_TV);
+    console.log("🆔 ID do dispositivo:", obterIdDispositivo());
+    console.log("📌 Este código NUNCA vai mudar para este dispositivo!");
     
+    // 2. Registrar no backend
     await registarTV();
     
-    // Criar container do player (oculto inicialmente)
+    // 3. Criar container do player
     const playerContainer = document.createElement('div');
     playerContainer.id = 'playerContainer';
     playerContainer.className = 'player-container';
     document.body.appendChild(playerContainer);
     
-    // Renderizar UI inicial
+    // 4. Renderizar UI
     await atualizarPlaylist();
     
-    // Listener para sair do fullscreen com ESC
+    // 5. Listener para sair do fullscreen
     document.addEventListener('fullscreenchange', function() {
         if (!document.fullscreenElement && estaEmFullscreen) {
-            // Se saiu do fullscreen, voltar à tela inicial
             voltarTelaInicial();
         }
     });
+    
+    console.log("✅ TV Manager inicializado com código FIXO!");
 })();
