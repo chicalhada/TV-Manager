@@ -43,6 +43,10 @@ JWT_SECRET = "tvmanager_secret_key_2026"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
+############################################################################################################
+
+from db import init_db
+init_db()
 
 ############################################################################################################
 
@@ -142,13 +146,19 @@ def register_tv():
 @login_required
 def get_playlists():
     playlists = list_playlists()
+    for p in playlists:
+        p['items'] = get_playlist_items(p['id'])   # ADICIONA OS ITENS
     return jsonify(playlists)
+
+from db import add_playlist   # mantém a importação
 
 @app.route("/api/playlists", methods=["POST"])
 @login_required
-def add_playlist():
+def create_playlist():        # nome diferente
     data = request.get_json()
-    playlist_id = add_playlist(data["name"])
+    if not data or not data.get("name"):
+        return jsonify({"error": "Nome da playlist é obrigatório"}), 400
+    playlist_id = add_playlist(data["name"])   # agora chama a do db
     playlist_items = get_playlist_items(playlist_id)
     playlist = {"id": playlist_id, "name": data["name"], "items": playlist_items}
     return jsonify(playlist), 201
@@ -214,7 +224,7 @@ def upload_file():
 
 @app.route("/api/media", methods=["GET"])
 @login_required
-def get_media():
+def get_media_list():
     media = list_media()
     return jsonify(media)
 
@@ -319,6 +329,9 @@ def register():
     password = data.get("password")
     email = data.get("email")
 
+    if email == "":
+        email = None
+
     if not username or not password:
         return jsonify({"error": "Username e password são obrigatórios"}), 400
 
@@ -417,6 +430,7 @@ def delete_user(user_id):
 @app.route('/api/assign', methods=['GET'])
 @login_required
 def get_assignments():
+    from db import list_child_sites, get_assignment_for_tv, get_playlist
     sites = list_child_sites()
     result = []
     for site in sites:

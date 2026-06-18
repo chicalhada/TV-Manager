@@ -1,5 +1,5 @@
 /* ============================================================
-   CSS COMPLETO
+   CSS COMPLETO - DESIGN MODERNO
    ============================================================ */
 * {
     margin: 0;
@@ -8,8 +8,8 @@
 }
 
 body {
-    font-family: 'Segoe UI', system-ui, 'Inter', 'Poppins', -apple-system, 'Roboto', sans-serif;
-    background: radial-gradient(circle at 20% 30%, #0a0f1e, #03060c);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(ellipse at 20% 30%, #0f172a, #020617);
     min-height: 100vh;
     display: flex;
     align-items: center;
@@ -18,23 +18,47 @@ body {
     overflow: hidden;
 }
 
+/* ============================================================
+   ANIMAÇÃO DE FUNDO
+   ============================================================ */
+body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 40%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
+                radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+    animation: bgFloat 20s ease-in-out infinite alternate;
+    z-index: 0;
+}
+
+@keyframes bgFloat {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(-5%, 5%) rotate(3deg); }
+}
+
 .app-container {
+    position: relative;
+    z-index: 1;
     width: 100%;
-    max-width: 1400px;
+    max-width: 1200px;
     margin: 0 auto;
 }
 
 /* ============================================================
-   TELA INICIAL - CÓDIGO
+   CARDS E TELA INICIAL
    ============================================================ */
 .card {
-    background: rgba(15, 25, 45, 0.75);
-    backdrop-filter: blur(12px);
-    border-radius: 56px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    padding: 30px 28px;
-    transition: all 0.2s ease;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    padding: 40px 32px;
+    transition: all 0.3s ease;
 }
 
 .tv-mode {
@@ -43,87 +67,140 @@ body {
     align-items: center;
     justify-content: center;
     text-align: center;
-    min-height: 85vh;
+    min-height: 80vh;
 }
 
+/* Badge do código */
+.fixed-code-badge {
+    display: inline-block;
+    background: rgba(251, 191, 36, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    padding: 6px 18px;
+    border-radius: 40px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #fbbf24;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+}
+
+/* Títulos */
+.tv-mode h2 {
+    font-size: 2.8rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+}
+
+.tv-mode .subtitle {
+    color: #94a3b8;
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    font-weight: 400;
+}
+
+/* Caixa do código */
 .tv-code-box {
-    background: #000000aa;
-    backdrop-filter: blur(20px);
-    padding: 40px 55px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    padding: 32px 60px;
     border-radius: 80px;
-    margin: 30px 0;
-    border: 2px solid #ffd966;
-    box-shadow: 0 0 30px rgba(255, 220, 100, 0.4);
+    margin: 24px 0 10px 0;
+    border: 2px solid rgba(251, 191, 36, 0.5);
+    box-shadow: 0 0 40px rgba(251, 191, 36, 0.15), 0 0 80px rgba(251, 191, 36, 0.05);
+    transition: all 0.3s ease;
+}
+
+.tv-code-box:hover {
+    box-shadow: 0 0 60px rgba(251, 191, 36, 0.25);
+    border-color: #fbbf24;
 }
 
 .code-digit {
-    font-size: 6rem;
+    font-size: 5.5rem;
     font-weight: 800;
-    letter-spacing: 18px;
-    font-family: 'Courier New', 'Fira Mono', monospace;
-    background: linear-gradient(135deg, #FFE6B0, #FFB347);
+    letter-spacing: 16px;
+    font-family: 'Courier New', 'Fira Code', monospace;
+    background: linear-gradient(135deg, #fde68a, #f59e0b);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    text-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    text-shadow: none;
 }
 
+/* ID do dispositivo (pequeno) */
+.device-id {
+    color: #475569;
+    font-size: 0.7rem;
+    font-family: monospace;
+    margin-top: -8px;
+    margin-bottom: 16px;
+    letter-spacing: 0.5px;
+}
+
+/* Status */
 .tv-status {
-    font-size: 1.4rem;
-    color: #b9fbc0;
-    font-weight: 500;
-    background: #1e2a3a70;
-    padding: 10px 24px;
+    font-size: 1rem;
+    color: #94a3b8;
+    background: rgba(30, 41, 59, 0.5);
+    padding: 10px 28px;
     border-radius: 60px;
     display: inline-block;
-    margin-top: 15px;
+    margin-top: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.fixed-code-badge {
-    background: #ffa23430;
-    border: 1px solid #ffa234;
-    padding: 6px 14px;
-    border-radius: 40px;
-    font-size: 0.8rem;
-    margin-bottom: 20px;
-    display: inline-block;
-    color: #ffa234;
-}
-
-h2 {
-    color: #ffd9a5;
-    margin-top: 5px;
-    font-size: 2.5rem;
-}
-
-.subtitle {
-    color: #bbccff;
-    margin-bottom: 5px;
-    font-size: 1.1rem;
-}
-
-/* Botão para simular entrada do código (para teste) */
-.btn-simular-codigo {
-    margin-top: 20px;
-    padding: 15px 40px;
-    background: linear-gradient(135deg, #ffb347, #ff8c00);
+/* Botão principal */
+.btn-primary {
+    margin-top: 28px;
+    padding: 16px 48px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
     border: none;
-    border-radius: 50px;
-    color: #000;
-    font-weight: bold;
+    border-radius: 60px;
+    color: #fff;
+    font-weight: 600;
     font-size: 1.1rem;
     cursor: pointer;
-    transition: 0.3s;
-    box-shadow: 0 4px 20px rgba(255, 180, 70, 0.4);
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
 }
 
-.btn-simular-codigo:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 30px rgba(255, 180, 70, 0.6);
+.btn-primary:hover {
+    transform: scale(1.03);
+    box-shadow: 0 6px 30px rgba(99, 102, 241, 0.5);
+}
+
+.btn-primary:active {
+    transform: scale(0.97);
+}
+
+.btn-primary i {
+    font-size: 1.2rem;
+}
+
+/* Rodapé da tela inicial */
+.footer-note {
+    color: #475569;
+    font-size: 0.75rem;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    width: 100%;
+    max-width: 400px;
+}
+
+.footer-note i {
+    margin-right: 6px;
+    color: #6366f1;
 }
 
 /* ============================================================
-   PLAYER - OCULTO INICIALMENTE
+   PLAYER EM FULLSCREEN
    ============================================================ */
 .player-container {
     display: none;
@@ -142,9 +219,6 @@ h2 {
     justify-content: center;
 }
 
-/* ============================================================
-   ESTILOS PARA FULLSCREEN - TELA CHEIA TOTAL
-   ============================================================ */
 .fullscreen-mode {
     width: 100vw;
     height: 100vh;
@@ -158,87 +232,40 @@ h2 {
     position: relative;
 }
 
-.fullscreen-mode video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: cover;
-    display: block;
-    background: #000;
-}
-
+.fullscreen-mode video,
 .fullscreen-mode img {
     width: 100vw;
     height: 100vh;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
     background: #000;
 }
 
 .fullscreen-mode .no-media-fullscreen {
     color: #fff;
-    font-size: 2rem;
+    font-size: 1.8rem;
     text-align: center;
-    padding: 20px;
+    padding: 30px 40px;
     background: rgba(0, 0, 0, 0.8);
-    border-radius: 20px;
-    border: 2px solid #ffb347;
+    border-radius: 24px;
+    border: 2px solid rgba(251, 191, 36, 0.3);
     max-width: 80%;
 }
 
 /* ============================================================
-   BOTÕES DE CONTROLE - OCULTOS POR PADRÃO
+   CONTROLES DO PLAYER
    ============================================================ */
-.exit-fullscreen-btn {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    color: white;
-    padding: 15px 30px;
-    border-radius: 50px;
-    font-size: 1.2rem;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 10000;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-}
-
-.exit-fullscreen-btn.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.exit-fullscreen-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
-}
-
-.exit-fullscreen-btn svg {
-    width: 24px;
-    height: 24px;
-    fill: white;
-}
-
 .fullscreen-controls {
     position: fixed;
-    bottom: 30px;
+    bottom: 40px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10000;
     display: flex;
-    gap: 15px;
+    gap: 16px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.4s ease;
 }
 
 .fullscreen-controls.visible {
@@ -247,20 +274,88 @@ h2 {
 }
 
 .fullscreen-controls button {
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
     padding: 12px 24px;
-    border-radius: 30px;
-    font-size: 1rem;
+    border-radius: 40px;
+    font-size: 0.95rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .fullscreen-controls button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    transform: scale(1.05);
+    background: rgba(99, 102, 241, 0.7);
+    transform: scale(1.04);
+}
+
+.exit-fullscreen-btn {
+    position: fixed;
+    bottom: 40px;
+    right: 40px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 40px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    z-index: 10000;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.2s ease;
+}
+
+.exit-fullscreen-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.exit-fullscreen-btn:hover {
+    background: rgba(239, 68, 68, 0.7);
+    transform: scale(1.04);
+}
+
+.exit-fullscreen-btn i {
+    font-size: 1.2rem;
+}
+
+/* Overlay de "Clique para tocar" (se autoplay falhar) */
+.play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 9999;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+}
+
+.play-overlay i {
+    font-size: 4rem;
+    color: #fff;
+    text-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+    transition: transform 0.3s ease;
+}
+
+.play-overlay:hover i {
+    transform: scale(1.15);
 }
 
 /* ============================================================
@@ -272,23 +367,53 @@ h2 {
         letter-spacing: 8px;
     }
     .tv-code-box {
-        padding: 25px 30px;
+        padding: 24px 30px;
     }
-    h2 {
-        font-size: 1.8rem;
+    .tv-mode h2 {
+        font-size: 2rem;
+    }
+    .btn-primary {
+        padding: 14px 32px;
+        font-size: 1rem;
     }
     .exit-fullscreen-btn {
         bottom: 20px;
         right: 20px;
-        padding: 12px 20px;
-        font-size: 1rem;
+        padding: 10px 18px;
+        font-size: 0.9rem;
+    }
+    .fullscreen-controls {
+        bottom: 24px;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
     }
     .fullscreen-controls button {
         padding: 10px 16px;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
     .fullscreen-mode .no-media-fullscreen {
         font-size: 1.2rem;
-        padding: 15px;
+        padding: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .code-digit {
+        font-size: 2.4rem;
+        letter-spacing: 4px;
+    }
+    .tv-code-box {
+        padding: 16px 20px;
+    }
+    .card {
+        padding: 24px 16px;
+        border-radius: 32px;
+    }
+    .btn-primary {
+        padding: 12px 24px;
+        font-size: 0.9rem;
+        width: 100%;
+        justify-content: center;
     }
 }

@@ -2,6 +2,150 @@
 const API_BASE = 'http://localhost:5000/api';
 let currentView = 'dashboard';
 
+// ----- Sistema de notificações Toast -----
+function showToast(message, type = 'success') {
+    const colors = {
+        success: 'bg-emerald-500',
+        error: 'bg-red-500',
+        warning: 'bg-amber-500',
+        info: 'bg-blue-500'
+    };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 ${colors[type]} text-white px-5 py-3 rounded-xl shadow-lg transform transition-all duration-500 translate-x-full max-w-sm flex items-center gap-3`;
+    toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.remove('translate-x-full');
+        toast.classList.add('translate-x-0');
+    }, 100);
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => toast.remove(), 500);
+    }, 3500);
+}
+
+// ----- Modal personalizado (genérico) -----
+function openModal(title, fields, onConfirm) {
+    const modal = document.getElementById('customModal');
+    const titleEl = document.getElementById('modalTitle');
+    const body = document.getElementById('modalBody');
+    const confirmBtn = document.getElementById('modalConfirmBtn');
+    const cancelBtn = document.getElementById('modalCancelBtn');
+    const closeBtn = document.getElementById('closeModalBtn');
+
+    titleEl.innerText = title;
+    body.innerHTML = fields.map(f => `
+        <div class="mb-4">
+            <label for="${f.id}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">${f.label}</label>
+            <input type="${f.type}" id="${f.id}" value="${f.value || ''}" placeholder="${f.placeholder || ''}" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+    `).join('');
+
+    modal.classList.remove('hidden');
+
+    const cleanup = () => {
+        modal.classList.add('hidden');
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        closeBtn.removeEventListener('click', handleCancel);
+    };
+
+    const handleConfirm = () => {
+        const values = fields.map(f => document.getElementById(f.id).value.trim());
+        cleanup();
+        onConfirm(values);
+    };
+
+    const handleCancel = () => cleanup();
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    closeBtn.addEventListener('click', handleCancel);
+}
+
+// ----- Modal de confirmação (para exclusões) -----
+function confirmModal(message, onConfirm) {
+    const modal = document.getElementById('customModal');
+    const titleEl = document.getElementById('modalTitle');
+    const body = document.getElementById('modalBody');
+    const confirmBtn = document.getElementById('modalConfirmBtn');
+    const cancelBtn = document.getElementById('modalCancelBtn');
+    const closeBtn = document.getElementById('closeModalBtn');
+
+    titleEl.innerText = 'Confirmar';
+    body.innerHTML = `<p class="text-gray-700 dark:text-gray-300">${message}</p>`;
+
+    modal.classList.remove('hidden');
+
+    const cleanup = () => {
+        modal.classList.add('hidden');
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+        closeBtn.removeEventListener('click', handleCancel);
+    };
+
+    const handleConfirm = () => {
+        cleanup();
+        onConfirm();
+    };
+
+    const handleCancel = () => cleanup();
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    closeBtn.addEventListener('click', handleCancel);
+}
+
+// ----- Lightbox para imagens e vídeos -----
+function showLightbox(url) {
+    const lightbox = document.getElementById('lightbox');
+    const img = document.getElementById('lightboxImage');
+    const videoContainer = document.getElementById('lightboxVideoContainer');
+    
+    // Esconder ambos inicialmente
+    img.style.display = 'none';
+    videoContainer.style.display = 'none';
+    videoContainer.innerHTML = '';
+
+    // Verificar se é vídeo
+    const isVideo = url.match(/\.(mp4|webm|ogg|mov|avi)$/i);
+    
+    if (isVideo) {
+        videoContainer.style.display = 'block';
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        video.autoplay = true;
+        video.className = 'max-w-full max-h-[80vh] rounded-lg';
+        videoContainer.appendChild(video);
+    } else {
+        img.style.display = 'block';
+        img.src = url;
+    }
+    
+    lightbox.classList.remove('hidden');
+}
+
+document.getElementById('closeLightbox')?.addEventListener('click', () => {
+    document.getElementById('lightbox').classList.add('hidden');
+    // Parar vídeo se estiver a tocar
+    const video = document.querySelector('#lightboxVideoContainer video');
+    if (video) video.pause();
+});
+document.getElementById('lightbox')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        document.getElementById('lightbox').classList.add('hidden');
+        const video = document.querySelector('#lightboxVideoContainer video');
+        if (video) video.pause();
+    }
+});
+
 // ----- Autenticação -----
 function checkAuth() {
     const token = localStorage.getItem('admin_token');
@@ -11,10 +155,11 @@ function checkAuth() {
     }
     const userName = localStorage.getItem('admin_user') || 'Admin';
     document.getElementById('userName').innerText = userName;
+    const initial = userName.charAt(0).toUpperCase();
+    document.getElementById('userInitial').innerText = initial;
     return true;
 }
 
-// Logout
 document.getElementById('logoutBtn')?.addEventListener('click', () => {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
@@ -53,269 +198,438 @@ document.querySelectorAll('.nav-item').forEach(item => {
         const view = item.dataset.view;
         if (!view) return;
         currentView = view;
-        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('bg-indigo-700'));
-        item.classList.add('bg-indigo-700');
+        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('bg-indigo-50', 'dark:bg-indigo-900/30', 'text-indigo-600', 'dark:text-indigo-400'));
+        item.classList.add('bg-indigo-50', 'dark:bg-indigo-900/30', 'text-indigo-600', 'dark:text-indigo-400');
+        const titles = {
+            dashboard: 'Dashboard',
+            tvs: 'Televisões',
+            media: 'Mídias',
+            playlists: 'Playlists',
+            assign: 'Atribuições'
+        };
+        document.getElementById('pageTitle').innerText = titles[view] || 'Dashboard';
         loadView(view);
     });
 });
 
 async function loadView(view) {
     const container = document.getElementById('viewContainer');
-    container.innerHTML = '<div class="text-center py-10">Carregando...</div>';
+    container.innerHTML = '<div class="text-center py-12"><div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div><p class="mt-3 text-gray-500 dark:text-gray-400">Carregando...</p></div>';
     switch (view) {
         case 'dashboard': await loadDashboard(container); break;
         case 'tvs': await loadTVs(container); break;
         case 'media': await loadMedia(container); break;
         case 'playlists': await loadPlaylists(container); break;
         case 'assign': await loadAssign(container); break;
-        case 'users': await loadUsers(container); break;
-        default: container.innerHTML = '<p>Selecione uma opção</p>';
+        default: container.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Selecione uma opção</p>';
     }
 }
 
-// ----- DASHBOARD -----
+// ----- DASHBOARD (sem utilizadores) -----
 async function loadDashboard(container) {
     try {
-        const tvs = await (await fetchAuth('/tvs')).json();
-        const playlists = await (await fetchAuth('/playlists')).json();
-        const media = await (await fetchAuth('/media')).json();
-        const totalTVs = tvs.length;
-        const totalPlaylists = playlists.length;
-        const totalMedia = media.length;
-        const firstTV = tvs[0] || { codigo: 'XXXX' };
-        container.innerHTML = `
-            <h2 class="text-2xl font-bold mb-6">Dashboard</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white border rounded-xl shadow p-4 flex items-center">
-                    <div class="rounded-full bg-indigo-100 p-3 mr-4"><i class="fas fa-tv text-indigo-600 text-xl"></i></div>
-                    <div><p class="text-gray-500">Total TVs</p><p class="text-2xl font-bold">${totalTVs}</p></div>
-                </div>
-                <div class="bg-white border rounded-xl shadow p-4 flex items-center">
-                    <div class="rounded-full bg-green-100 p-3 mr-4"><i class="fas fa-list text-green-600 text-xl"></i></div>
-                    <div><p class="text-gray-500">Total Playlists</p><p class="text-2xl font-bold">${totalPlaylists}</p></div>
-                </div>
-                <div class="bg-white border rounded-xl shadow p-4 flex items-center">
-                    <div class="rounded-full bg-blue-100 p-3 mr-4"><i class="fas fa-file-alt text-blue-600 text-xl"></i></div>
-                    <div><p class="text-gray-500">Total Mídias</p><p class="text-2xl font-bold">${totalMedia}</p></div>
+        const [tvs, playlists, media] = await Promise.all([
+            fetchAuth('/tvs').then(r => r.json()),
+            fetchAuth('/playlists').then(r => r.json()),
+            fetchAuth('/media').then(r => r.json())
+        ]);
+        const stats = [
+            { label: 'Televisões', value: tvs.length, icon: 'fa-tv', color: 'indigo' },
+            { label: 'Playlists', value: playlists.length, icon: 'fa-list-ul', color: 'emerald' },
+            { label: 'Mídias', value: media.length, icon: 'fa-image', color: 'blue' }
+        ];
+        const cards = stats.map(s => `
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 transition hover:shadow-md">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${s.label}</p>
+                        <p class="text-3xl font-bold text-gray-800 dark:text-white mt-1">${s.value}</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-${s.color}-50 dark:bg-${s.color}-900/20 flex items-center justify-center text-${s.color}-500 dark:text-${s.color}-400">
+                        <i class="fas ${s.icon} text-xl"></i>
+                    </div>
                 </div>
             </div>
-            <div class="bg-white border rounded-xl shadow p-4">
-                <h3 class="font-semibold text-lg mb-2">TV Exemplo</h3>
-                <p>Código: <strong>${firstTV.codigo}</strong></p>
-                <p class="text-sm text-gray-500 mt-2">Use este código na TV para conectá-la</p>
+        `).join('');
+        container.innerHTML = `
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">${cards}</div>
+            <div class="mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-4">Resumo</h3>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div><span class="text-gray-500 dark:text-gray-400">Total de TVs:</span> <span class="font-medium dark:text-white">${tvs.length}</span></div>
+                    <div><span class="text-gray-500 dark:text-gray-400">Playlists:</span> <span class="font-medium dark:text-white">${playlists.length}</span></div>
+                    <div><span class="text-gray-500 dark:text-gray-400">Mídias:</span> <span class="font-medium dark:text-white">${media.length}</span></div>
+                </div>
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<p class="text-red-600">Erro: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
     }
 }
 
-// ----- TVs -----
+// ----- TVs (sem IP, com modal) -----
 async function loadTVs(container) {
     try {
         const tvs = await (await fetchAuth('/tvs')).json();
+        let filtered = tvs;
+
+        const searchInput = document.createElement('input');
+        searchInput.placeholder = '🔍 Pesquisar televisão...';
+        searchInput.className = 'w-full sm:w-64 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
+
+        const renderTable = (data) => {
+            const tbody = document.querySelector('#tvsTable tbody');
+            if (!tbody) return;
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-500 dark:text-gray-400">Nenhuma televisão encontrada</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = data.map(tv => `
+                <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
+                    <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">#${tv.id}</td>
+                    <td class="py-3 px-4 font-medium text-gray-800 dark:text-white">${tv.name}</td>
+                    <td class="py-3 px-4 text-sm font-mono text-gray-600 dark:text-gray-300">${tv.codigo || '—'}</td>
+                    <td class="py-3 px-4">
+                        <button class="delete-tv text-red-500 hover:text-red-700 dark:hover:text-red-400 transition text-sm font-medium" data-id="${tv.id}">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            document.querySelectorAll('.delete-tv').forEach(btn => btn.addEventListener('click', () => {
+                confirmModal('Tem certeza que deseja remover esta TV?', async () => {
+                    await fetchAuth(`/tvs/${btn.dataset.id}`, { method: 'DELETE' });
+                    showToast('TV removida com sucesso', 'success');
+                    loadTVs(container);
+                });
+            }));
+        };
+
         container.innerHTML = `
-            <h2 class="text-2xl font-bold mb-4">Televisões</h2>
-            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h3 class="font-semibold mb-2">Adicionar TV</h3>
-                <div class="flex flex-wrap gap-2">
-                    <input type="text" id="tvName" placeholder="Nome" class="border rounded px-3 py-1">
-                    <input type="text" id="tvIp" placeholder="IP (opcional)" class="border rounded px-3 py-1">
-                    <input type="text" id="tvCodigo" placeholder="Código (opcional)" class="border rounded px-3 py-1">
-                    <button id="addTvBtn" class="bg-indigo-600 text-white px-4 py-1 rounded hover:bg-indigo-700">Adicionar</button>
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Todas as Televisões</h3>
+                <button id="addTvBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium">
+                    <i class="fas fa-plus"></i> Adicionar
+                </button>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center gap-3">
+                    <div class="flex-1 min-w-[200px]">${searchInput.outerHTML}</div>
+                    <span class="text-sm text-gray-400 dark:text-gray-500">${tvs.length} televisões</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full" id="tvsTable">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                            <tr>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nome</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
-            <div class="overflow-x-auto"><table class="min-w-full bg-white border"><thead class="bg-gray-100"><tr><th class="py-2 px-3 border">ID</th><th>Nome</th><th>IP</th><th>Código</th><th>Ações</th></tr></thead><tbody>
-                ${tvs.map(tv => `<tr><td class="py-1 px-3 border">${tv.id}</td><td class="py-1 px-3 border">${tv.name}</td><td class="py-1 px-3 border">${tv.ip || '-'}</td><td class="py-1 px-3 border">${tv.codigo || '-'}</td><td class="py-1 px-3 border"><button class="delete-tv bg-red-500 text-white px-2 py-1 rounded text-sm" data-id="${tv.id}">Remover</button></td></tr>`).join('')}
-            </tbody></table></div>
         `;
-        document.getElementById('addTvBtn')?.addEventListener('click', async () => {
-            const name = document.getElementById('tvName').value;
-            if (!name) return alert('Nome obrigatório');
-            const ip = document.getElementById('tvIp').value;
-            const codigo = document.getElementById('tvCodigo').value;
-            await fetchAuth('/tvs', {
-                method: 'POST',
-                body: JSON.stringify({ name, ip, codigo: codigo || undefined })
-            });
-            loadTVs(container);
+
+        const search = document.querySelector('input[placeholder="🔍 Pesquisar televisão..."]');
+        search.addEventListener('input', function() {
+            const term = this.value.toLowerCase().trim();
+            const filteredData = tvs.filter(tv => 
+                tv.name.toLowerCase().includes(term) || 
+                (tv.codigo && tv.codigo.toLowerCase().includes(term))
+            );
+            renderTable(filteredData);
         });
-        document.querySelectorAll('.delete-tv').forEach(btn => btn.addEventListener('click', async () => {
-            if (confirm('Remover TV?')) {
-                await fetchAuth(`/tvs/${btn.dataset.id}`, { method: 'DELETE' });
+
+        renderTable(tvs);
+
+        document.getElementById('addTvBtn')?.addEventListener('click', () => {
+            openModal('Nova Televisão', [
+                { label: 'Nome', id: 'tvName', type: 'text', placeholder: 'Nome da TV' },
+                { label: 'Código (opcional)', id: 'tvCodigo', type: 'text', placeholder: '1234' }
+            ], async (values) => {
+                const [name, codigo] = values;
+                if (!name) return showToast('Nome obrigatório', 'warning');
+                await fetchAuth('/tvs', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, codigo: codigo || undefined })
+                });
+                showToast('TV adicionada com sucesso', 'success');
                 loadTVs(container);
-            }
-        }));
-    } catch (err) { container.innerHTML = `<p class="text-red-600">Erro: ${err.message}</p>`; }
+            });
+        });
+
+    } catch (err) {
+        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+    }
 }
 
-// ----- Mídias (Upload e Listagem) -----
+// ----- Mídias (com miniaturas e lightbox para vídeos) -----
 async function loadMedia(container) {
     try {
         const media = await (await fetchAuth('/media')).json();
         container.innerHTML = `
-            <h2 class="text-2xl font-bold mb-4">Mídias</h2>
-            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h3 class="font-semibold mb-2">Upload</h3>
-                <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="mb-2"><br>
-                <button id="uploadBtn" class="bg-green-600 text-white px-4 py-1 rounded">Enviar</button>
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Mídias</h3>
+                <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <i class="fas fa-upload"></i> Upload
+                    <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
+                </label>
             </div>
-            <div class="overflow-x-auto"><table class="min-w-full bg-white border"><thead class="bg-gray-100"><tr><th>ID</th><th>Ficheiro</th><th>Tipo</th><th>URL</th><th>Ações</th></tr></thead><tbody>
-                ${media.map(m => `<tr><td class="py-1 px-3 border">${m.id}</td><td class="py-1 px-3 border">${m.filename}</td><td class="py-1 px-3 border">${m.mime_type}</td><td class="py-1 px-3 border"><a href="${m.url}" target="_blank">Ver</a></td><td class="py-1 px-3 border"><button class="delete-media bg-red-500 text-white px-2 py-1 rounded" data-id="${m.id}">Remover</button></td></tr>`).join('')}
-            </tbody></table></div>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                            <tr>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ficheiro</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pré-visualização</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${media.map(m => {
+                                const isVideo = m.mime_type && m.mime_type.startsWith('video/');
+                                return `
+                                <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
+                                    <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">#${m.id}</td>
+                                    <td class="py-3 px-4 text-sm font-medium text-gray-800 dark:text-white">${m.filename}</td>
+                                    <td class="py-3 px-4">
+                                        ${isVideo ? 
+                                            `<div class="w-24 h-16 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80 transition" onclick="showLightbox('${m.url}')">
+                                                <i class="fas fa-play-circle text-4xl text-indigo-500 dark:text-indigo-400"></i>
+                                            </div>` :
+                                            `<img src="${m.url}" alt="${m.filename}" class="w-16 h-16 object-cover rounded-lg cursor-pointer hover:opacity-80 transition" onclick="showLightbox('${m.url}')">`
+                                        }
+                                    </td>
+                                    <td class="py-3 px-4 text-sm text-gray-500 dark:text-gray-400">${m.mime_type}</td>
+                                    <td class="py-3 px-4">
+                                        <button class="delete-media text-red-500 hover:text-red-700 dark:hover:text-red-400 transition" data-id="${m.id}">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `}).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         `;
-        document.getElementById('uploadBtn')?.addEventListener('click', async () => {
-            const files = document.getElementById('mediaUpload').files;
+
+        document.getElementById('mediaUpload')?.addEventListener('change', async function() {
+            const files = this.files;
             if (!files.length) return;
             const fd = new FormData();
             for (let f of files) fd.append('file', f);
             const token = localStorage.getItem('admin_token');
-            const resp = await fetch(`${API_BASE}/upload`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: fd
-            });
-            if (resp.ok) { alert('Upload concluído'); loadMedia(container); }
-            else alert('Erro no upload');
-        });
-        document.querySelectorAll('.delete-media').forEach(btn => btn.addEventListener('click', async () => {
-            if (confirm('Remover?')) {
-                await fetchAuth(`/media/${btn.dataset.id}`, { method: 'DELETE' });
-                loadMedia(container);
+            try {
+                const resp = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: fd
+                });
+                if (resp.ok) {
+                    showToast('Upload concluído com sucesso', 'success');
+                    loadMedia(container);
+                } else {
+                    showToast('Erro no upload', 'error');
+                }
+            } catch (e) {
+                showToast('Erro de conexão', 'error');
             }
+            this.value = '';
+        });
+
+        document.querySelectorAll('.delete-media').forEach(btn => btn.addEventListener('click', () => {
+            confirmModal('Tem certeza que deseja remover esta mídia?', async () => {
+                await fetchAuth(`/media/${btn.dataset.id}`, { method: 'DELETE' });
+                showToast('Mídia removida', 'success');
+                loadMedia(container);
+            });
         }));
-    } catch (err) { container.innerHTML = `<p class="text-red-600">Erro: ${err.message}</p>`; }
+
+    } catch (err) {
+        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+    }
 }
 
-// ----- Playlists (listar, criar, adicionar itens) -----
+// ----- Playlists (com modal) -----
 async function loadPlaylists(container) {
     try {
         const [playlists, media] = await Promise.all([
-            (await fetchAuth('/playlists')).json(),
-            (await fetchAuth('/media')).json()
+            fetchAuth('/playlists').then(r => r.json()),
+            fetchAuth('/media').then(r => r.json())
         ]);
-        let html = `<h2 class="text-2xl font-bold mb-4">Playlists</h2>
-            <div class="mb-6 bg-gray-50 p-4 rounded-lg"><h3 class="font-semibold mb-2">Nova Playlist</h3><div class="flex gap-2"><input type="text" id="playlistName" placeholder="Nome" class="border rounded px-3 py-1"><button id="createPlaylistBtn" class="bg-indigo-600 text-white px-4 py-1 rounded">Criar</button></div></div>
-            <div class="space-y-6">`;
+        let html = `
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Playlists</h3>
+                <button id="createPlaylistBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium">
+                    <i class="fas fa-plus"></i> Nova Playlist
+                </button>
+            </div>
+            <div class="space-y-4">
+        `;
         for (let p of playlists) {
             const items = p.items || [];
-            html += `<div class="border rounded-lg p-4 bg-white"><div class="flex justify-between items-center mb-3"><h3 class="text-xl font-semibold">${p.name}</h3><button class="delete-playlist bg-red-500 text-white px-3 py-1 rounded" data-id="${p.id}">Remover Playlist</button></div>
-                <div class="mb-3 flex flex-wrap gap-2"><select id="mediaSelect_${p.id}" class="border rounded px-2 py-1"><option value="">Selecione</option>${media.map(m => `<option value="${m.id}">${m.filename}</option>`).join('')}</select>
-                <input type="number" id="duration_${p.id}" placeholder="Duração (s)" value="10" class="border rounded px-2 py-1 w-24">
-                <button class="add-item bg-green-600 text-white px-3 py-1 rounded" data-id="${p.id}">Adicionar item</button></div>
-                <table class="min-w-full border text-sm"><thead class="bg-gray-100"><tr><th>Ordem</th><th>Mídia</th><th>Duração</th><th>Ação</th></tr></thead><tbody id="items_${p.id}">`;
-            for (let item of items) {
-                html += `<tr><td class="py-1 px-2 border">${item.display_order}</td><td class="py-1 px-2 border">${item.filename}</td><td class="py-1 px-2 border">${item.duration_seconds}s</td><td class="py-1 px-2 border"><button class="remove-item bg-red-400 text-white px-2 py-0.5 rounded" data-item="${item.id}">Remover</button></td></tr>`;
-            }
-            html += `</tbody></table></div>`;
+            html += `
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h4 class="font-semibold text-gray-800 dark:text-white">${p.name}</h4>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-400 dark:text-gray-500">${items.length} itens</span>
+                            <button class="delete-playlist text-red-500 hover:text-red-700 dark:hover:text-red-400 transition text-sm" data-id="${p.id}">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 mb-3">
+                        <select id="mediaSelect_${p.id}" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300">
+                            <option value="">Selecione mídia</option>
+                            ${media.map(m => `<option value="${m.id}">${m.filename}</option>`).join('')}
+                        </select>
+                        <input type="number" id="duration_${p.id}" placeholder="Minutos" value="1" class="w-20 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300">
+                        <button class="add-item bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl transition text-sm" data-id="${p.id}">Adicionar</button>
+                    </div>
+                    ${items.length ? `
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                                    <tr><th class="text-left py-2 px-3">Ordem</th><th class="text-left py-2 px-3">Mídia</th><th class="text-left py-2 px-3">Duração</th><th class="text-left py-2 px-3">Ação</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${items.map(item => `
+                                        <tr class="border-b border-gray-50 dark:border-gray-800">
+                                            <td class="py-2 px-3 text-gray-600 dark:text-gray-400">${item.display_order}</td>
+                                            <td class="py-2 px-3 text-gray-700 dark:text-gray-300">${item.filename}</td>
+                                            <td class="py-2 px-3 text-gray-600 dark:text-gray-400">${Math.round(item.duration_seconds / 60)} min</td>
+                                            <td class="py-2 px-3"><button class="remove-item text-red-400 hover:text-red-600 transition" data-item="${item.id}"><i class="fas fa-times"></i></button></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<p class="text-sm text-gray-400 dark:text-gray-500">Nenhum item nesta playlist</p>'}
+                </div>
+            `;
         }
         html += `</div>`;
         container.innerHTML = html;
-        document.getElementById('createPlaylistBtn')?.addEventListener('click', async () => {
-            const name = document.getElementById('playlistName').value;
-            if (!name) return alert('Nome obrigatório');
-            await fetchAuth('/playlists', { method: 'POST', body: JSON.stringify({ name }) });
-            loadPlaylists(container);
+
+        document.getElementById('createPlaylistBtn')?.addEventListener('click', () => {
+            openModal('Nova Playlist', [
+                { label: 'Nome', id: 'playlistName', type: 'text', placeholder: 'Nome da playlist' }
+            ], async (values) => {
+                const [name] = values;
+                if (!name) return showToast('Nome obrigatório', 'warning');
+                await fetchAuth('/playlists', { method: 'POST', body: JSON.stringify({ name }) });
+                showToast('Playlist criada', 'success');
+                loadPlaylists(container);
+            });
         });
+
         document.querySelectorAll('.add-item').forEach(btn => btn.addEventListener('click', async () => {
             const pid = btn.dataset.id;
             const mid = document.getElementById(`mediaSelect_${pid}`).value;
             const dur = document.getElementById(`duration_${pid}`).value;
-            if (!mid) return alert('Selecione mídia');
+            if (!mid) return showToast('Selecione uma mídia', 'warning');
             await fetchAuth(`/playlists/${pid}/items`, {
                 method: 'POST',
                 body: JSON.stringify({ media_id: parseInt(mid), duration: parseInt(dur) })
             });
+            showToast('Item adicionado', 'success');
             loadPlaylists(container);
         }));
-        document.querySelectorAll('.remove-item').forEach(btn => btn.addEventListener('click', async () => {
-            if (confirm('Remover item?')) {
-                const pid = btn.closest('.border')?.querySelector('.delete-playlist')?.dataset.id;
+
+        document.querySelectorAll('.remove-item').forEach(btn => btn.addEventListener('click', () => {
+            const pid = btn.closest('.border')?.querySelector('.delete-playlist')?.dataset.id;
+            confirmModal('Remover este item?', async () => {
                 await fetchAuth(`/playlists/${pid}/items/${btn.dataset.item}`, { method: 'DELETE' });
+                showToast('Item removido', 'success');
                 loadPlaylists(container);
-            }
+            });
         }));
-        document.querySelectorAll('.delete-playlist').forEach(btn => btn.addEventListener('click', async () => {
-            if (confirm('Remover playlist?')) {
+
+        document.querySelectorAll('.delete-playlist').forEach(btn => btn.addEventListener('click', () => {
+            confirmModal('Remover esta playlist?', async () => {
                 await fetchAuth(`/playlists/${btn.dataset.id}`, { method: 'DELETE' });
+                showToast('Playlist removida', 'success');
                 loadPlaylists(container);
-            }
+            });
         }));
-    } catch (err) { container.innerHTML = `<p class="text-red-600">Erro: ${err.message}</p>`; }
+
+    } catch (err) {
+        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+    }
 }
 
-// ----- Atribuições (assign) -----
+// ----- Atribuições (sem alterações) -----
 async function loadAssign(container) {
     try {
         const [tvs, playlists, assignments] = await Promise.all([
-            (await fetchAuth('/tvs')).json(),
-            (await fetchAuth('/playlists')).json(),
-            (await fetchAuth('/assign')).json() // precisa de criar esta rota no backend
+            fetchAuth('/tvs').then(r => r.json()),
+            fetchAuth('/playlists').then(r => r.json()),
+            fetchAuth('/assign').then(r => r.json())
         ]);
         container.innerHTML = `
-            <h2 class="text-2xl font-bold mb-4">Atribuir Playlist a TV</h2>
-            <div class="mb-6 bg-gray-50 p-4 rounded-lg flex flex-wrap gap-4 items-end">
-                <div><label class="block text-sm">TV (código)</label><select id="assignTV" class="border rounded px-3 py-1">${tvs.map(tv => `<option value="${tv.codigo}">${tv.name} (${tv.codigo})</option>`).join('')}</select></div>
-                <div><label class="block text-sm">Playlist</label><select id="assignPlaylist" class="border rounded px-3 py-1">${playlists.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
-                <button id="assignBtn" class="bg-indigo-600 text-white px-4 py-1 rounded">Atribuir</button>
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Atribuir Playlist a TV</h3>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 mb-6">
+                <div class="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-500 dark:text-gray-400 mb-1">TV</label>
+                        <select id="assignTV" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-gray-700 dark:text-gray-300">
+                            ${tvs.map(tv => `<option value="${tv.codigo}">${tv.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-500 dark:text-gray-400 mb-1">Playlist</label>
+                        <select id="assignPlaylist" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-gray-700 dark:text-gray-300">
+                            ${playlists.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <button id="assignBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl transition">Atribuir</button>
+                </div>
             </div>
-            <h3 class="text-xl font-semibold mb-2">Atribuições Atuais</h3>
-            <div class="overflow-x-auto"><table class="min-w-full bg-white border"><thead class="bg-gray-100"><tr><th>TV</th><th>Playlist</th><th>Atribuída em</th></tr></thead><tbody>
-                ${assignments.map(a => `<tr><td class="py-1 px-3 border">${a.child_site_name}</td><td class="py-1 px-3 border">${a.playlist_name}</td><td class="py-1 px-3 border">${new Date(a.assigned_at).toLocaleString()}</td></tr>`).join('')}
-            </tbody></table></div>
+            <h4 class="font-medium text-gray-700 dark:text-gray-300 mb-3">Atribuições Atuais</h4>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                            <tr>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TV</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Playlist</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Atribuída em</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${assignments.map(a => `
+                                <tr class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${a.child_site_name}</td>
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${a.playlist_name}</td>
+                                    <td class="py-3 px-4 text-sm text-gray-500 dark:text-gray-400">${new Date(a.assigned_at).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         `;
         document.getElementById('assignBtn')?.addEventListener('click', async () => {
             const codigo = document.getElementById('assignTV').value;
             const playlist_id = document.getElementById('assignPlaylist').value;
-            if (!codigo || !playlist_id) return alert('Selecione ambos');
+            if (!codigo || !playlist_id) return showToast('Selecione ambos', 'warning');
             await fetchAuth('/assign', {
                 method: 'POST',
                 body: JSON.stringify({ child_site_codigo: codigo, playlist_id: parseInt(playlist_id) })
             });
-            alert('Atribuído'); loadAssign(container);
+            showToast('Atribuído com sucesso', 'success');
+            loadAssign(container);
         });
-    } catch (err) { container.innerHTML = `<p class="text-red-600">Erro: ${err.message}</p>`; }
-}
-
-// ----- Utilizadores -----
-async function loadUsers(container) {
-    try {
-        const users = await (await fetchAuth('/users')).json();
-        container.innerHTML = `
-            <h2 class="text-2xl font-bold mb-4">Utilizadores</h2>
-            <div class="mb-6 bg-gray-50 p-4 rounded-lg">
-                <h3 class="font-semibold mb-2">Adicionar Utilizador</h3>
-                <div class="flex flex-wrap gap-2">
-                    <input type="text" id="newUsername" placeholder="Usuário" class="border rounded px-3 py-1">
-                    <input type="password" id="newPassword" placeholder="Senha" class="border rounded px-3 py-1">
-                    <input type="email" id="newEmail" placeholder="Email" class="border rounded px-3 py-1">
-                    <select id="newRole" class="border rounded px-3 py-1"><option value="admin">Admin</option><option value="viewer">Visualizador</option></select>
-                    <button id="addUserBtn" class="bg-indigo-600 text-white px-4 py-1 rounded">Adicionar</button>
-                </div>
-            </div>
-            <div class="overflow-x-auto"><table class="min-w-full bg-white border"><thead class="bg-gray-100"><tr><th>ID</th><th>Usuário</th><th>Email</th><th>Função</th><th>Criado em</th><th>Ações</th></tr></thead><tbody>
-                ${users.map(u => `<tr><td class="py-1 px-3 border">${u.id}</td><td class="py-1 px-3 border">${u.username}</td><td class="py-1 px-3 border">${u.email || '-'}</td><td class="py-1 px-3 border">${u.role}</td><td class="py-1 px-3 border">${new Date(u.created_at).toLocaleDateString()}</td><td class="py-1 px-3 border"><button class="delete-user bg-red-500 text-white px-2 py-1 rounded" data-id="${u.id}">Remover</button></td></tr>`).join('')}
-            </tbody></table></div>
-        `;
-        document.getElementById('addUserBtn')?.addEventListener('click', async () => {
-            const username = document.getElementById('newUsername').value;
-            const password = document.getElementById('newPassword').value;
-            const email = document.getElementById('newEmail').value;
-            const role = document.getElementById('newRole').value;
-            if (!username || !password) return alert('Usuário e senha obrigatórios');
-            await fetchAuth('/users', {
-                method: 'POST',
-                body: JSON.stringify({ username, password, email, role })
-            });
-            loadUsers(container);
-        });
-        document.querySelectorAll('.delete-user').forEach(btn => btn.addEventListener('click', async () => {
-            if (confirm('Remover utilizador?')) {
-                await fetchAuth(`/users/${btn.dataset.id}`, { method: 'DELETE' });
-                loadUsers(container);
-            }
-        }));
-    } catch (err) { container.innerHTML = `<p class="text-red-600">Erro: ${err.message}</p>`; }
+    } catch (err) {
+        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+    }
 }
 
 // Iniciar
