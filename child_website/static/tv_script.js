@@ -125,7 +125,7 @@ async function registarTV() {
     try {
         socket.emit('register_tv', { codigo: CODIGO_TV });
         const deviceId = obterIdDispositivo();
-        const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+        const codigo = CODIGO_TV;
         const response = await fetch(`${API_BASE}/api/tv/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -140,7 +140,7 @@ async function registarTV() {
 
 async function buscarPlaylist() {
     try {
-        const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+        const codigo = CODIGO_TV;
         const response = await fetch(`${API_BASE}/api/child/${codigo}/playlist`);
         if (response.status === 404) {
             console.log("📭 Ainda sem playlist.");
@@ -170,8 +170,19 @@ function ativarPlayer() {
     const playerContainer = document.getElementById('playerContainer');
     if (playerContainer) playerContainer.classList.add('active');
     
-    // Iniciar reprodução imediatamente
-    iniciarReproducao();
+    // Buscar playlist antes de iniciar
+    buscarPlaylist().then(playlist => {
+        if (playlist && playlist.items && playlist.items.length > 0) {
+            itemsPlaylist = playlist.items;
+            iniciarReproducao();
+        } else {
+            console.log("📭 Nenhum item para reproduzir");
+            const container = document.getElementById('fullscreenContainer');
+            if (container) {
+                container.innerHTML = `<div class="no-media-fullscreen">📭 Nenhum item para reproduzir</div>`;
+            }
+        }
+    });
     
     if (intervaloPolling) clearInterval(intervaloPolling);
     intervaloPolling = setInterval(atualizarPlaylist, 30000);
@@ -593,5 +604,99 @@ function iniciarReproducao() {
     
     avancarLoop();
 }
+
+
+// ============================================================
+// 8. FUNÇÕES DE UI
+// ============================================================
+function renderizarUI(playlist, statusMensagem) {
+    const root = document.getElementById('appRoot');
+    if (!root) return;
+    
+    const temPlaylist = playlist && playlist.items && playlist.items.length > 0;
+    const deviceId = obterIdDispositivo();
+    const codigoFixo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+
+    root.innerHTML = `
+        <div class="card tv-mode">
+            <div>
+                <div class="fixed-code-badge">📺 CÓDIGO DE EMPARELHAMENTO (FIXO)</div>
+                <h2>MODO TV</h2>
+                <p class="subtitle">Insira o código abaixo para iniciar a reprodução</p>
+                <div class="tv-code-box">
+                    <div class="code-digit">${codigoFixo}</div>
+                </div>
+                <div class="device-id">ID: ${deviceId.substring(0, 20)}...</div>
+                <div class="tv-status" id="tvStatusMsg">
+                    ${statusMensagem || (temPlaylist ? '✅ Playlist disponível! Clique em "INICIAR"' : '⏳ Aguardando playlist...')}
+                </div>
+                ${temPlaylist ? `
+                    <button class="btn-primary" onclick="ativarPlayer()">
+                        <i class="fas fa-play"></i> INICIAR REPRODUÇÃO
+                    </button>
+                ` : `
+                    <p style="color: #64748b; margin-top: 20px; font-size: 0.9rem;">
+                        <i class="fas fa-circle-notch fa-spin"></i> Aguardando atribuição de playlist...
+                    </p>
+                `}
+                <div class="footer-note">
+                    <i class="fas fa-lock"></i> Código permanente para este dispositivo
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// 9. FUNÇÃO PRINCIPAL - POLLING
+// ============================================================
+async function atualizarPlaylist() {
+    if (!playerAtivo) {
+        const playlist = await buscarPlaylist();
+        if (playlist && playlist.items && playlist.items.length > 0) {
+            renderizarUI(playlist, '✅ Playlist disponível! Clique em "INICIAR"');
+        } else {
+            renderizarUI(null, '⏳ Aguardando playlist...');
+        }
+        return;
+    }
+    
+    const playlist = await buscarPlaylist();
+    if (playlist && playlist.items && playlist.items.length > 0) {
+        itemsPlaylist = playlist.items;
+        // Se já estiver a reproduzir, não interrompe
+    } else {
+        pararReproducao();
+        voltarTelaInicial();
+    }
+}
+
+// ============================================================
+// 10. INICIALIZAÇÃO
+// ============================================================
+(async function iniciar() {
+    CODIGO_TV = await obterOuCriarCodigo();
+    console.log("🔑 CÓDIGO FIXO:", CODIGO_TV);
+    await registarTV();
+
+    // Criar container do player
+    const playerContainer = document.getElementById('playerContainer');
+    if (!playerContainer) {
+        const container = document.createElement('div');
+        container.id = 'playerContainer';
+        container.className = 'player-container';
+        document.body.appendChild(container);
+    }
+
+    await atualizarPlaylist();
+
+    document.addEventListener('fullscreenchange', function() {
+        if (!document.fullscreenElement && estaEmFullscreen) {
+            voltarTelaInicial();
+        }
+    });
+
+    console.log("✅ TV Manager inicializado com código FIXO e autoplay melhorado!");
+})();
 
 //

@@ -203,7 +203,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
         const titles = {
             dashboard: 'Dashboard',
             tvs: 'Televisões',
-            media: 'Mídias',
+            media: 'Ficheiros',
             playlists: 'Playlists',
             assign: 'Atribuições'
         };
@@ -236,7 +236,7 @@ async function loadDashboard(container) {
         const stats = [
             { label: 'Televisões', value: tvs.length, icon: 'fa-tv', color: 'indigo' },
             { label: 'Playlists', value: playlists.length, icon: 'fa-list-ul', color: 'emerald' },
-            { label: 'Mídias', value: media.length, icon: 'fa-image', color: 'blue' }
+            { label: 'Ficheiros', value: media.length, icon: 'fa-image', color: 'blue' }
         ];
         const cards = stats.map(s => `
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 transition hover:shadow-md">
@@ -258,7 +258,7 @@ async function loadDashboard(container) {
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                     <div><span class="text-gray-500 dark:text-gray-400">Total de TVs:</span> <span class="font-medium dark:text-white">${tvs.length}</span></div>
                     <div><span class="text-gray-500 dark:text-gray-400">Playlists:</span> <span class="font-medium dark:text-white">${playlists.length}</span></div>
-                    <div><span class="text-gray-500 dark:text-gray-400">Mídias:</span> <span class="font-medium dark:text-white">${media.length}</span></div>
+                    <div><span class="text-gray-500 dark:text-gray-400">Ficheiros:</span> <span class="font-medium dark:text-white">${media.length}</span></div>
                 </div>
             </div>
         `;
@@ -372,7 +372,7 @@ async function loadMedia(container) {
         const media = await (await fetchAuth('/media')).json();
         container.innerHTML = `
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Mídias</h3>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Ficheiros</h3>
                 <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium cursor-pointer">
                     <i class="fas fa-upload"></i> Upload
                     <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
@@ -444,9 +444,9 @@ async function loadMedia(container) {
         });
 
         document.querySelectorAll('.delete-media').forEach(btn => btn.addEventListener('click', () => {
-            confirmModal('Tem certeza que deseja remover esta mídia?', async () => {
+            confirmModal('Tem a certeza que deseja remover este ficheiro?', async () => {
                 await fetchAuth(`/media/${btn.dataset.id}`, { method: 'DELETE' });
-                showToast('Mídia removida', 'success');
+                showToast('Ficheiro removido', 'success');
                 loadMedia(container);
             });
         }));
@@ -456,7 +456,7 @@ async function loadMedia(container) {
     }
 }
 
-// ----- Playlists (com modal) -----
+// ----- Playlists (com modal + edição de duração + reordenar) -----
 async function loadPlaylists(container) {
     try {
         const [playlists, media] = await Promise.all([
@@ -487,25 +487,32 @@ async function loadPlaylists(container) {
                     </div>
                     <div class="flex flex-wrap items-center gap-2 mb-3">
                         <select id="mediaSelect_${p.id}" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300">
-                            <option value="">Selecione mídia</option>
+                            <option value="">Selecione um ficheiro</option>
                             ${media.map(m => `<option value="${m.id}">${m.filename}</option>`).join('')}
                         </select>
-                        <input type="number" id="duration_${p.id}" placeholder="Minutos" value="1" class="w-20 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300">
+                        <input type="number" id="duration_${p.id}" placeholder="Segundos" value="10" class="w-20 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300">
                         <button class="add-item bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl transition text-sm" data-id="${p.id}">Adicionar</button>
                     </div>
                     ${items.length ? `
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead class="text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
-                                    <tr><th class="text-left py-2 px-3">Ordem</th><th class="text-left py-2 px-3">Mídia</th><th class="text-left py-2 px-3">Duração</th><th class="text-left py-2 px-3">Ação</th></tr>
+                                    <tr><th class="text-left py-2 px-3">Ordem</th><th class="text-left py-2 px-3">Ficheiro</th><th class="text-left py-2 px-3">Duração (s)</th><th class="text-left py-2 px-3">Ações</th></tr>
                                 </thead>
                                 <tbody>
                                     ${items.map(item => `
                                         <tr class="border-b border-gray-50 dark:border-gray-800">
                                             <td class="py-2 px-3 text-gray-600 dark:text-gray-400">${item.display_order}</td>
                                             <td class="py-2 px-3 text-gray-700 dark:text-gray-300">${item.filename}</td>
-                                            <td class="py-2 px-3 text-gray-600 dark:text-gray-400">${Math.round(item.duration_seconds / 60)} min</td>
-                                            <td class="py-2 px-3"><button class="remove-item text-red-400 hover:text-red-600 transition" data-item="${item.id}"><i class="fas fa-times"></i></button></td>
+                                            <td class="py-2 px-3">
+                                                <input type="number" class="duration-input w-16 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-1 py-0.5 text-sm text-gray-700 dark:text-gray-300" value="${item.duration_seconds}" min="1" data-item="${item.id}" data-playlist="${p.id}">
+                                                <button class="update-duration bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded text-xs transition ml-1" data-item="${item.id}" data-playlist="${p.id}">Atualizar</button>
+                                            </td>
+                                            <td class="py-2 px-3">
+                                                <button class="move-up bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs transition mr-1" data-item="${item.id}" data-playlist="${p.id}">▲</button>
+                                                <button class="move-down bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs transition" data-item="${item.id}" data-playlist="${p.id}">▼</button>
+                                                <button class="remove-item text-red-400 hover:text-red-600 transition ml-1" data-item="${item.id}"><i class="fas fa-times"></i></button>
+                                            </td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -518,6 +525,7 @@ async function loadPlaylists(container) {
         html += `</div>`;
         container.innerHTML = html;
 
+        // Criar playlist
         document.getElementById('createPlaylistBtn')?.addEventListener('click', () => {
             openModal('Nova Playlist', [
                 { label: 'Nome', id: 'playlistName', type: 'text', placeholder: 'Nome da playlist' }
@@ -530,11 +538,12 @@ async function loadPlaylists(container) {
             });
         });
 
+        // Adicionar item
         document.querySelectorAll('.add-item').forEach(btn => btn.addEventListener('click', async () => {
             const pid = btn.dataset.id;
             const mid = document.getElementById(`mediaSelect_${pid}`).value;
             const dur = document.getElementById(`duration_${pid}`).value;
-            if (!mid) return showToast('Selecione uma mídia', 'warning');
+            if (!mid) return showToast('Selecione um ficheiro', 'warning');
             await fetchAuth(`/playlists/${pid}/items`, {
                 method: 'POST',
                 body: JSON.stringify({ media_id: parseInt(mid), duration: parseInt(dur) })
@@ -543,6 +552,33 @@ async function loadPlaylists(container) {
             loadPlaylists(container);
         }));
 
+        // Atualizar duração
+        document.querySelectorAll('.update-duration').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const itemId = this.dataset.item;
+                const playlistId = this.dataset.playlist;
+                const input = document.querySelector(`.duration-input[data-item="${itemId}"]`);
+                const duration = parseInt(input.value);
+                
+                if (!duration || duration < 1) {
+                    showToast('Duração inválida (mínimo 1 segundo)', 'warning');
+                    return;
+                }
+                
+                try {
+                    await fetchAuth(`/playlists/${playlistId}/items/${itemId}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ duration: duration })
+                    });
+                    showToast('Duração atualizada!', 'success');
+                    loadPlaylists(container);
+                } catch (err) {
+                    showToast('Erro ao atualizar', 'error');
+                }
+            });
+        });
+
+        // Remover item
         document.querySelectorAll('.remove-item').forEach(btn => btn.addEventListener('click', () => {
             const pid = btn.closest('.border')?.querySelector('.delete-playlist')?.dataset.id;
             confirmModal('Remover este item?', async () => {
@@ -552,6 +588,65 @@ async function loadPlaylists(container) {
             });
         }));
 
+        // Mover para cima
+        document.querySelectorAll('.move-up').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const itemId = parseInt(this.dataset.item);
+                const playlistId = parseInt(this.dataset.playlist);
+                
+                // Buscar items atuais
+                const playlist = await (await fetchAuth(`/playlists/${playlistId}`)).json();
+                const items = playlist.items || [];
+                const currentIndex = items.findIndex(item => item.id === itemId);
+                
+                if (currentIndex <= 0) {
+                    showToast('Já está no topo', 'warning');
+                    return;
+                }
+                
+                // Trocar ordem
+                const newOrder = items.map(item => item.id);
+                [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]];
+                
+                await fetchAuth(`/playlists/${playlistId}/items/reorder`, {
+                    method: 'POST',
+                    body: JSON.stringify({ item_ids: newOrder })
+                });
+                showToast('Item movido para cima', 'success');
+                loadPlaylists(container);
+            });
+        });
+
+        // Mover para baixo
+        document.querySelectorAll('.move-down').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const itemId = parseInt(this.dataset.item);
+                const playlistId = parseInt(this.dataset.playlist);
+                
+                // Buscar items atuais
+                const playlist = await (await fetchAuth(`/playlists/${playlistId}`)).json();
+                const items = playlist.items || [];
+                const currentIndex = items.findIndex(item => item.id === itemId);
+                
+                if (currentIndex === -1 || currentIndex >= items.length - 1) {
+                    showToast('Já está no fundo', 'warning');
+                    return;
+                }
+                
+                // Trocar ordem
+                const newOrder = items.map(item => item.id);
+                [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
+                
+                await fetchAuth(`/playlists/${playlistId}/items/reorder`, {
+                    method: 'POST',
+                    body: JSON.stringify({ item_ids: newOrder })
+                });
+                showToast('Item movido para baixo', 'success');
+                loadPlaylists(container);
+            });
+        });
+
+        // Apagar playlist
         document.querySelectorAll('.delete-playlist').forEach(btn => btn.addEventListener('click', () => {
             confirmModal('Remover esta playlist?', async () => {
                 await fetchAuth(`/playlists/${btn.dataset.id}`, { method: 'DELETE' });
@@ -620,12 +715,41 @@ async function loadAssign(container) {
             const codigo = document.getElementById('assignTV').value;
             const playlist_id = document.getElementById('assignPlaylist').value;
             if (!codigo || !playlist_id) return showToast('Selecione ambos', 'warning');
-            await fetchAuth('/assign', {
-                method: 'POST',
-                body: JSON.stringify({ child_site_codigo: codigo, playlist_id: parseInt(playlist_id) })
-            });
-            showToast('Atribuído com sucesso', 'success');
-            loadAssign(container);
+            
+            const token = localStorage.getItem('admin_token');
+            if (!token) {
+                showToast('Sessão expirada. Faça login novamente.', 'error');
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/assign`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ child_site_codigo: codigo, playlist_id: parseInt(playlist_id) })
+                });
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('admin_token');
+                    localStorage.removeItem('admin_user');
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const data = await response.json();
+                if (response.ok) {
+                    showToast('Atribuído com sucesso', 'success');
+                    loadAssign(container);
+                } else {
+                    showToast(data.error || 'Erro ao atribuir', 'error');
+                }
+            } catch (err) {
+                showToast('Erro de conexão', 'error');
+            }
         });
     } catch (err) {
         container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;

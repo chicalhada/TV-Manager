@@ -114,10 +114,10 @@ def authenticate_user(username, password):
         return user
     return None
 
-def add_child_site(name, ip=None, codigo=None):
+def add_child_site(name, user_id, ip=None, codigo=None):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO child_sites (name, ip, codigo) VALUES (?, ?, ?)", (name, ip, codigo))
+    cursor.execute("INSERT INTO child_sites (name, user_id, ip, codigo) VALUES (?, ?, ?, ?)", (name, user_id, ip, codigo))
     conn.commit()
     site_id = cursor.lastrowid
     conn.close()
@@ -139,10 +139,10 @@ def get_child_site_by_id(site_id):
     conn.close()
     return dict(row) if row else None
 
-def list_child_sites():
+def list_child_sites(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM child_sites ORDER BY id")
+    cursor.execute("SELECT * FROM child_sites WHERE user_id = ? ORDER BY id", (user_id,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -154,19 +154,19 @@ def delete_child_site(site_id):
     conn.commit()
     conn.close()
 
-def add_media(filename, url, mime_type):
+def add_media(filename, url, mime_type, user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO media (filename, url, mime_type) VALUES (?, ?, ?)", (filename, url, mime_type))
+    cursor.execute("INSERT INTO media (filename, url, mime_type, user_id) VALUES (?, ?, ?, ?)", (filename, url, mime_type, user_id))
     conn.commit()
     media_id = cursor.lastrowid
     conn.close()
     return media_id
 
-def list_media():
+def list_media(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM media ORDER BY uploaded_at DESC")
+    cursor.execute("SELECT * FROM media WHERE user_id = ? ORDER BY uploaded_at DESC", (user_id,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -189,10 +189,10 @@ def delete_media(media_id):
     conn.commit()
     conn.close()
 
-def add_playlist(name):
+def add_playlist(name, user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO playlists (name) VALUES (?)", (name,))
+    cursor.execute("INSERT INTO playlists (name, user_id) VALUES (?, ?)", (name, user_id))
     conn.commit()
     pid = cursor.lastrowid
     conn.close()
@@ -206,10 +206,10 @@ def get_playlist(playlist_id):
     conn.close()
     return dict(row) if row else None
 
-def list_playlists():
+def list_playlists(user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM playlists ORDER BY created_at DESC")
+    cursor.execute("SELECT * FROM playlists WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -236,16 +236,26 @@ def add_playlist_item(playlist_id, media_id, duration_seconds, display_order=Non
     conn.close()
     return item_id
 
-def get_playlist_items(playlist_id):
+def get_playlist_items(playlist_id, user_id=None):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT pi.*, m.url, m.mime_type, m.filename
-        FROM playlist_items pi
-        JOIN media m ON pi.media_id = m.id
-        WHERE pi.playlist_id = ?
-        ORDER BY pi.display_order
-    ''', (playlist_id,))
+    if user_id:
+        cursor.execute('''
+            SELECT pi.*, m.url, m.mime_type, m.filename
+            FROM playlist_items pi
+            JOIN media m ON pi.media_id = m.id
+            JOIN playlists p ON pi.playlist_id = p.id
+            WHERE pi.playlist_id = ? AND p.user_id = ?
+            ORDER BY pi.display_order
+        ''', (playlist_id, user_id))
+    else:
+        cursor.execute('''
+            SELECT pi.*, m.url, m.mime_type, m.filename
+            FROM playlist_items pi
+            JOIN media m ON pi.media_id = m.id
+            WHERE pi.playlist_id = ?
+            ORDER BY pi.display_order
+        ''', (playlist_id,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -257,18 +267,18 @@ def remove_playlist_item(item_id):
     conn.commit()
     conn.close()
 
-def assign_playlist_to_tv(child_site_id, playlist_id):
+def assign_playlist_to_tv(child_site_id, playlist_id, user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM assignments WHERE child_site_id = ?", (child_site_id,))
-    cursor.execute("INSERT INTO assignments (child_site_id, playlist_id) VALUES (?, ?)", (child_site_id, playlist_id))
+    cursor.execute("DELETE FROM assignments WHERE child_site_id = ? AND user_id = ?", (child_site_id, user_id))
+    cursor.execute("INSERT INTO assignments (child_site_id, playlist_id, user_id) VALUES (?, ?, ?)", (child_site_id, playlist_id, user_id))
     conn.commit()
     conn.close()
 
-def get_current_playlist_for_tv(child_site_id):
+def get_current_playlist_for_tv(child_site_id, user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT playlist_id FROM assignments WHERE child_site_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site_id,))
+    cursor.execute("SELECT playlist_id FROM assignments WHERE child_site_id = ? AND user_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site_id, user_id))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -280,10 +290,10 @@ def get_current_playlist_for_tv(child_site_id):
             return playlist
     return None
 
-def get_assignment_for_tv(child_site_id):
+def get_assignment_for_tv(child_site_id, user_id):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM assignments WHERE child_site_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site_id,))
+    cursor.execute("SELECT * FROM assignments WHERE child_site_id = ? AND user_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site_id, user_id))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -300,23 +310,25 @@ if __name__ == '__main__':
     conn.commit()
     conn.close()
 
-    tv_id = add_child_site("TV Sala", "192.168.1.10", "1234")
+    user_id = 1
+
+    tv_id = add_child_site("TV Sala", user_id, "192.168.1.10", "1234")
     print(f"✅ TV adicionada com id: {tv_id}")
 
     tv = get_child_site_by_id(tv_id)
     print("get_child_site_by_id:", tv)
 
-    media_id = add_media("demo.jpg", "/uploads/demo.jpg", "image/jpeg")
+    media_id = add_media("demo.jpg", "/uploads/demo.jpg", "image/jpeg", user_id)
     print(f"✅ Media adicionada com id: {media_id}")
 
     media = get_media_by_id(media_id)
     print("get_media_by_id:", media)
 
-    playlist_id = add_playlist("Playlist Teste")
+    playlist_id = add_playlist("Playlist Teste", user_id)
     item_id = add_playlist_item(playlist_id, media_id, 15)
     print(f"✅ Playlist criada id: {playlist_id}, item id: {item_id}")
 
-    assign_playlist_to_tv(tv_id, playlist_id)
+    assign_playlist_to_tv(tv_id, playlist_id, user_id)
     print("✅ Playlist atribuída à TV")
 
     delete_media(media_id)
@@ -330,7 +342,7 @@ if __name__ == '__main__':
     print("🗑️ Playlist removida")
     print("Playlist após delete:", get_playlist(playlist_id))
 
-    assign = get_assignment_for_tv(tv_id)
+    assign = get_assignment_for_tv(tv_id, user_id)
     print(f"Atribuição após delete_playlist: {assign}")
 
     delete_child_site(tv_id)

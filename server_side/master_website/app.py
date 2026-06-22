@@ -31,7 +31,11 @@ from db import (
     list_users as db_list_users,
     delete_user as db_delete_user,
     get_assignment_for_tv,
-    get_playlist
+    get_playlist,
+    delete_child_site,
+    delete_media,
+    delete_playlist,
+    remove_playlist_item
 )
 
 app = Flask(__name__)
@@ -111,8 +115,12 @@ def health():
 @app.route("/api/tvs", methods=["GET"])
 @login_required
 def get_tvs():
-    tvs = list_child_sites()
-    return jsonify(tvs)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM child_sites ORDER BY id")
+    rows = cursor.fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in rows])
 
 @app.route('/tv')
 def tv():
@@ -122,8 +130,14 @@ def tv():
 @login_required
 def add_tv():
     data = request.get_json()
-    child_id = add_child_site(data["name"], data.get("ip"), None)
-    tvs = list_child_sites()
+    user_id = request.current_user["user_id"]
+    child_id = add_child_site(
+        data["name"],
+        user_id,
+        data.get("ip"),
+        data.get("codigo")
+    )
+    tvs = list_child_sites(user_id)
     nova_tv = next((tv for tv in tvs if tv["id"] == child_id), None)
     return jsonify(nova_tv), 201
 
@@ -137,7 +151,7 @@ def register_tv():
     
     tv = get_child_site_by_codigo(codigo)
     if not tv:
-        child_id = add_child_site(f"TV {codigo}", None, codigo)
+        child_id = add_child_site(f"TV {codigo}", 1, None, codigo)
         tv = get_child_site_by_codigo(codigo)
     
     return jsonify({"success": True, "codigo": tv["codigo"], "child_id": tv["id"]}), 200
@@ -147,12 +161,11 @@ def register_tv():
 @app.route("/api/playlists", methods=["GET"])
 @login_required
 def get_playlists():
-    playlists = list_playlists()
+    user_id = request.current_user["user_id"]
+    playlists = list_playlists(user_id)
     for p in playlists:
-        p['items'] = get_playlist_items(p['id'])   
+        p['items'] = get_playlist_items(p['id'], user_id)   
     return jsonify(playlists)
-
-
 
 @app.route("/api/playlists", methods=["POST"])
 @login_required
@@ -160,22 +173,26 @@ def create_playlist():
     data = request.get_json()
     if not data or not data.get("name"):
         return jsonify({"error": "Nome da playlist é obrigatório"}), 400
-    playlist_id = add_playlist(data["name"]) 
-    playlist_items = get_playlist_items(playlist_id)
+    user_id = request.current_user["user_id"]
+    playlist_id = add_playlist(data["name"], user_id) 
+    playlist_items = get_playlist_items(playlist_id, user_id)
     playlist = {"id": playlist_id, "name": data["name"], "items": playlist_items}
     return jsonify(playlist), 201
 
 @app.route("/api/playlists/<int:playlist_id>", methods=["GET"])
 @login_required
 def get_playlist_detail(playlist_id):
-    items = get_playlist_items(playlist_id)
-    if items is None:
+    user_id = request.current_user["user_id"]
+    playlist = get_playlist(playlist_id)
+    if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
-    return jsonify({"id": playlist_id, "items": items})
+    items = get_playlist_items(playlist_id, user_id)
+    return jsonify({"id": playlist_id, "name": playlist['name'], "items": items})
 
 @app.route("/api/playlists/<int:playlist_id>/items", methods=["POST"])
 @login_required
 def add_item_to_playlist(playlist_id):
+    user_id = request.current_user["user_id"]
     item = request.get_json()
     media_id = item.get("media_id")
     duration = item.get("duration", 10)
@@ -183,21 +200,52 @@ def add_item_to_playlist(playlist_id):
     if not media_id:
         return jsonify({"error": "media_id é obrigatório"}), 400
     
-    items = get_playlist_items(playlist_id)
-    if items is None:
+    playlist = get_playlist(playlist_id)
+    if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
     
+    items = get_playlist_items(playlist_id, user_id)
     next_order = len(items) + 1
     add_playlist_item(playlist_id, media_id, duration, next_order)
     
-    playlist_atualizada = get_playlist_items(playlist_id)
+    playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 201
+
+@app.route("/api/playlists/<int:playlist_id>/items/<int:item_id>", methods=["PUT"])
+@login_required
+def update_playlist_item(playlist_id, item_id):
+    user_id = request.current_user["user_id"]
+    data = request.get_json()
+    duration = data.get("duration")
+    
+    if duration is None:
+        return jsonify({"error": "duration é obrigatório"}), 400
+    
+    playlist = get_playlist(playlist_id)
+    if not playlist or playlist['user_id'] != user_id:
+        return jsonify({"error": "Playlist não encontrada"}), 404
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM playlist_items WHERE id = ? AND playlist_id = ?", (item_id, playlist_id))
+    item = cursor.fetchone()
+    if not item:
+        conn.close()
+        return jsonify({"error": "Item não encontrado"}), 404
+    
+    cursor.execute("UPDATE playlist_items SET duration_seconds = ? WHERE id = ?", (duration, item_id))
+    conn.commit()
+    conn.close()
+    
+    playlist_atualizada = get_playlist_items(playlist_id, user_id)
+    return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
 ########################################################################################
 
 @app.route("/api/upload", methods=["POST"])
 @login_required
 def upload_file():
+    user_id = request.current_user["user_id"]
     files = request.files.getlist('file')
     
     if not files or files[0].filename == '':
@@ -214,7 +262,7 @@ def upload_file():
         
         url = f"/{upload_folder}{filename}"
         mime_type = file.mimetype
-        media_id = add_media(filename, url, mime_type)
+        media_id = add_media(filename, url, mime_type, user_id)
         
         resultados.append({
             "id": media_id,
@@ -227,7 +275,8 @@ def upload_file():
 @app.route("/api/media", methods=["GET"])
 @login_required
 def get_media_list():
-    media = list_media()
+    user_id = request.current_user["user_id"]
+    media = list_media(user_id)
     return jsonify(media)
 
 @app.route('/uploads/<path:filename>')
@@ -239,6 +288,7 @@ def uploaded_file(filename):
 @app.route("/api/assign", methods=["POST"])
 @login_required
 def assign_playlist():
+    user_id = request.current_user["user_id"]
     data = request.get_json()
     child_site_codigo = data.get("child_site_codigo")
     playlist_id = data.get("playlist_id")
@@ -250,7 +300,7 @@ def assign_playlist():
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
     
-    assign_playlist_to_tv(child_site["id"], playlist_id)
+    assign_playlist_to_tv(child_site["id"], playlist_id, user_id)
 
     socketio.emit('playlist_updated', {
     'child_site_codigo': child_site_codigo,
@@ -267,9 +317,24 @@ def get_child_playlist(child_site_codigo):
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
-    playlist = get_current_playlist_for_tv(child_site["id"])
-    if not playlist:
+    
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT playlist_id FROM assignments WHERE child_site_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site["id"],))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if not row:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
+    
+    playlist_id = row['playlist_id']
+    playlist = get_playlist(playlist_id)
+    if not playlist:
+        return jsonify({"error": "Playlist não encontrada"}), 404
+    
+    items = get_playlist_items(playlist_id)
+    playlist['items'] = items
     return jsonify(playlist)
 
 ################################################################################
@@ -287,6 +352,7 @@ def delete_tv(child_id):
 @app.route("/api/media/<int:media_id>", methods=["DELETE"])
 @login_required
 def delete_media(media_id):
+    user_id = request.current_user["user_id"]
     media = get_media(media_id)
     if not media:
         return jsonify({"error": "Media não encontrado"}), 404
@@ -294,9 +360,10 @@ def delete_media(media_id):
     filepath = os.path.join(upload_folder, media["filename"])
     if os.path.exists(filepath):
         os.remove(filepath)
+    
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM media WHERE id = ?", (media_id,))
+    cursor.execute("DELETE FROM media WHERE id = ? AND user_id = ?", (media_id, user_id))
     conn.commit()
     conn.close()
     
@@ -305,9 +372,10 @@ def delete_media(media_id):
 @app.route("/api/playlists/<int:playlist_id>", methods=["DELETE"])
 @login_required 
 def delete_playlist(playlist_id):
+    user_id = request.current_user["user_id"]
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM playlists WHERE id = ?", (playlist_id,))
+    cursor.execute("DELETE FROM playlists WHERE id = ? AND user_id = ?", (playlist_id, user_id))
     conn.commit()
     conn.close()
     
@@ -316,6 +384,7 @@ def delete_playlist(playlist_id):
 @app.route("/api/playlists/<int:playlist_id>/items/<int:item_id>", methods=["DELETE"])
 @login_required
 def delete_playlist_item(playlist_id, item_id):
+    user_id = request.current_user["user_id"]
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -441,10 +510,11 @@ def delete_user(user_id):
 @app.route('/api/assign', methods=['GET'])
 @login_required
 def get_assignments():
-    sites = list_child_sites()
+    user_id = request.current_user["user_id"]
+    sites = list_child_sites(user_id)
     result = []
     for site in sites:
-        assign = get_assignment_for_tv(site['id'])
+        assign = get_assignment_for_tv(site['id'], user_id)
         if assign:
             playlist = get_playlist(assign['playlist_id'])
             result.append({
@@ -477,7 +547,37 @@ def handle_register_tv(data):
 
 ################################################################################################################
 
+# ========== ROTA PARA REORDENAR ITENS DA PLAYLIST ==========
+@app.route("/api/playlists/<int:playlist_id>/items/reorder", methods=["POST"])
+@login_required
+def reorder_playlist_items(playlist_id):
+    user_id = request.current_user["user_id"]
+    data = request.get_json()
+    item_ids = data.get("item_ids")
+    
+    if not item_ids:
+        return jsonify({"error": "item_ids é obrigatório"}), 400
+    
+    playlist = get_playlist(playlist_id)
+    if not playlist or playlist['user_id'] != user_id:
+        return jsonify({"error": "Playlist não encontrada"}), 404
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    for order, item_id in enumerate(item_ids, start=1):
+        cursor.execute(
+            "UPDATE playlist_items SET display_order = ? WHERE id = ? AND playlist_id = ?",
+            (order, item_id, playlist_id)
+        )
+    
+    conn.commit()
+    conn.close()
+    
+    playlist_atualizada = get_playlist_items(playlist_id, user_id)
+    return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
+################################################################################################################
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
