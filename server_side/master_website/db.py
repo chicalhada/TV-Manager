@@ -68,6 +68,20 @@ def init_db():
             FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tv_schedule (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            child_site_id INTEGER NOT NULL,
+            playlist_id INTEGER NOT NULL,
+            day_of_week TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT,
+            active BOOLEAN DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (child_site_id) REFERENCES child_sites(id) ON DELETE CASCADE,
+            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+        )
+    ''')
     conn.commit()
     conn.close()
     print("✅ Banco de dados inicializado.")
@@ -106,7 +120,6 @@ def delete_user(user_id):
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
-
 
 def authenticate_user(username, password):
     user = get_user_by_username(username)
@@ -206,6 +219,14 @@ def get_playlist(playlist_id):
     conn.close()
     return dict(row) if row else None
 
+def get_playlist_with_items(playlist_id):
+    playlist = get_playlist(playlist_id)
+    if not playlist:
+        return None
+    items = get_playlist_items(playlist_id)
+    playlist['items'] = items
+    return playlist
+
 def list_playlists(user_id):
     conn = get_connection()
     cursor = conn.cursor()
@@ -283,11 +304,7 @@ def get_current_playlist_for_tv(child_site_id, user_id):
     conn.close()
     if row:
         playlist_id = row['playlist_id']
-        playlist = get_playlist(playlist_id)
-        if playlist:
-            items = get_playlist_items(playlist_id)
-            playlist['items'] = items
-            return playlist
+        return get_playlist_with_items(playlist_id)
     return None
 
 def get_assignment_for_tv(child_site_id, user_id):
@@ -298,6 +315,112 @@ def get_assignment_for_tv(child_site_id, user_id):
     conn.close()
     return dict(row) if row else None
 
+# ========== FUNÇÕES PARA AGENDAMENTO ==========
+def add_schedule(child_site_id, playlist_id, day_of_week, start_time, end_time=None, active=1):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO tv_schedule (child_site_id, playlist_id, day_of_week, start_time, end_time, active)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (child_site_id, playlist_id, day_of_week, start_time, end_time, active))
+    conn.commit()
+    schedule_id = cursor.lastrowid
+    conn.close()
+    return schedule_id
+
+def get_schedules_by_tv(child_site_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.*, p.name as playlist_name
+        FROM tv_schedule s
+        JOIN playlists p ON s.playlist_id = p.id
+        WHERE s.child_site_id = ?
+        ORDER BY s.day_of_week, s.start_time
+    ''', (child_site_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_all_schedules(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.*, c.name as child_site_name, p.name as playlist_name
+        FROM tv_schedule s
+        JOIN child_sites c ON s.child_site_id = c.id
+        JOIN playlists p ON s.playlist_id = p.id
+        WHERE c.user_id = ?
+        ORDER BY s.day_of_week, s.start_time
+    ''', (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def update_schedule(schedule_id, child_site_id=None, playlist_id=None, day_of_week=None, start_time=None, end_time=None, active=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    updates = []
+    params = []
+    
+    if child_site_id is not None:
+        updates.append("child_site_id = ?")
+        params.append(child_site_id)
+    if playlist_id is not None:
+        updates.append("playlist_id = ?")
+        params.append(playlist_id)
+    if day_of_week is not None:
+        updates.append("day_of_week = ?")
+        params.append(day_of_week)
+    if start_time is not None:
+        updates.append("start_time = ?")
+        params.append(start_time)
+    if end_time is not None:
+        updates.append("end_time = ?")
+        params.append(end_time)
+    if active is not None:
+        updates.append("active = ?")
+        params.append(active)
+    
+    if not updates:
+        conn.close()
+        return None
+    
+    params.append(schedule_id)
+    cursor.execute(f"UPDATE tv_schedule SET {', '.join(updates)} WHERE id = ?", params)
+    conn.commit()
+    conn.close()
+    return True
+
+def delete_schedule(schedule_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tv_schedule WHERE id = ?", (schedule_id,))
+    conn.commit()
+    conn.close()
+    return True
+
+def get_active_playlist_for_tv(child_site_id, day_of_week, current_time):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT s.playlist_id
+        FROM tv_schedule s
+        WHERE s.child_site_id = ?
+        AND s.day_of_week = ?
+        AND s.start_time <= ?
+        AND (s.end_time IS NULL OR s.end_time >= ?)
+        AND s.active = 1
+        ORDER BY s.start_time DESC
+        LIMIT 1
+    ''', (child_site_id, day_of_week, current_time, current_time))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return get_playlist_with_items(row['playlist_id'])
+    return None
+
 if __name__ == '__main__':
     init_db()
 
@@ -307,6 +430,7 @@ if __name__ == '__main__':
     conn.execute("DELETE FROM media")
     conn.execute("DELETE FROM playlists")
     conn.execute("DELETE FROM child_sites")
+    conn.execute("DELETE FROM tv_schedule")
     conn.commit()
     conn.close()
 
@@ -315,14 +439,8 @@ if __name__ == '__main__':
     tv_id = add_child_site("TV Sala", user_id, "192.168.1.10", "1234")
     print(f"✅ TV adicionada com id: {tv_id}")
 
-    tv = get_child_site_by_id(tv_id)
-    print("get_child_site_by_id:", tv)
-
     media_id = add_media("demo.jpg", "/uploads/demo.jpg", "image/jpeg", user_id)
     print(f"✅ Media adicionada com id: {media_id}")
-
-    media = get_media_by_id(media_id)
-    print("get_media_by_id:", media)
 
     playlist_id = add_playlist("Playlist Teste", user_id)
     item_id = add_playlist_item(playlist_id, media_id, 15)
@@ -331,22 +449,17 @@ if __name__ == '__main__':
     assign_playlist_to_tv(tv_id, playlist_id, user_id)
     print("✅ Playlist atribuída à TV")
 
+    # Adicionar agendamento de exemplo
+    schedule_id = add_schedule(tv_id, playlist_id, "MON", "09:00", "18:00")
+    print(f"✅ Agendamento criado id: {schedule_id}")
+
     delete_media(media_id)
     print("🗑️ Media removida")
-    print("Media após delete:", get_media_by_id(media_id))
-
-    items_restantes = get_playlist_items(playlist_id)
-    print(f"Itens na playlist após delete_media: {items_restantes}")
 
     delete_playlist(playlist_id)
     print("🗑️ Playlist removida")
-    print("Playlist após delete:", get_playlist(playlist_id))
-
-    assign = get_assignment_for_tv(tv_id, user_id)
-    print(f"Atribuição após delete_playlist: {assign}")
 
     delete_child_site(tv_id)
     print("🗑️ TV removida")
-    print("TV após delete:", get_child_site_by_id(tv_id))
 
     print("\n✅ Testes concluídos. Todas as funções estão operacionais.")

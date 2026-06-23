@@ -108,12 +108,10 @@ function showLightbox(url) {
     const img = document.getElementById('lightboxImage');
     const videoContainer = document.getElementById('lightboxVideoContainer');
     
-    // Esconder ambos inicialmente
     img.style.display = 'none';
     videoContainer.style.display = 'none';
     videoContainer.innerHTML = '';
 
-    // Verificar se é vídeo
     const isVideo = url.match(/\.(mp4|webm|ogg|mov|avi)$/i);
     
     if (isVideo) {
@@ -134,7 +132,6 @@ function showLightbox(url) {
 
 document.getElementById('closeLightbox')?.addEventListener('click', () => {
     document.getElementById('lightbox').classList.add('hidden');
-    // Parar vídeo se estiver a tocar
     const video = document.querySelector('#lightboxVideoContainer video');
     if (video) video.pause();
 });
@@ -205,7 +202,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
             tvs: 'Televisões',
             media: 'Ficheiros',
             playlists: 'Playlists',
-            assign: 'Atribuições'
+            schedule: 'Agendamentos'
         };
         document.getElementById('pageTitle').innerText = titles[view] || 'Dashboard';
         loadView(view);
@@ -220,12 +217,12 @@ async function loadView(view) {
         case 'tvs': await loadTVs(container); break;
         case 'media': await loadMedia(container); break;
         case 'playlists': await loadPlaylists(container); break;
-        case 'assign': await loadAssign(container); break;
+        case 'schedule': await loadSchedule(container); break;
         default: container.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Selecione uma opção</p>';
     }
 }
 
-// ----- DASHBOARD (sem utilizadores) -----
+// ----- DASHBOARD -----
 async function loadDashboard(container) {
     try {
         const [tvs, playlists, media] = await Promise.all([
@@ -267,7 +264,7 @@ async function loadDashboard(container) {
     }
 }
 
-// ----- TVs (sem IP, com modal) -----
+// ----- TVs -----
 async function loadTVs(container) {
     try {
         const tvs = await (await fetchAuth('/tvs')).json();
@@ -366,7 +363,7 @@ async function loadTVs(container) {
     }
 }
 
-// ----- Mídias (com miniaturas e lightbox para vídeos) -----
+// ----- Mídias -----
 async function loadMedia(container) {
     try {
         const media = await (await fetchAuth('/media')).json();
@@ -456,7 +453,7 @@ async function loadMedia(container) {
     }
 }
 
-// ----- Playlists (com modal + edição de duração + reordenar) -----
+// ----- Playlists -----
 async function loadPlaylists(container) {
     try {
         const [playlists, media] = await Promise.all([
@@ -497,7 +494,7 @@ async function loadPlaylists(container) {
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead class="text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
-                                    <tr><th class="text-left py-2 px-3">Ordem</th><th class="text-left py-2 px-3">Ficheiro</th><th class="text-left py-2 px-3">Duração (s)</th><th class="text-left py-2 px-3">Ações</th></tr>
+                                    <tr><th class="text-left py-2 px-3">Ordem</th><th class="text-left py-2 px-3">Ficheiro</th><th class="text-left py-2 px-3">Duração (s)</th><th class="text-left py-2 px-3">Ação</th></tr>
                                 </thead>
                                 <tbody>
                                     ${items.map(item => `
@@ -525,7 +522,6 @@ async function loadPlaylists(container) {
         html += `</div>`;
         container.innerHTML = html;
 
-        // Criar playlist
         document.getElementById('createPlaylistBtn')?.addEventListener('click', () => {
             openModal('Nova Playlist', [
                 { label: 'Nome', id: 'playlistName', type: 'text', placeholder: 'Nome da playlist' }
@@ -538,7 +534,6 @@ async function loadPlaylists(container) {
             });
         });
 
-        // Adicionar item
         document.querySelectorAll('.add-item').forEach(btn => btn.addEventListener('click', async () => {
             const pid = btn.dataset.id;
             const mid = document.getElementById(`mediaSelect_${pid}`).value;
@@ -552,7 +547,6 @@ async function loadPlaylists(container) {
             loadPlaylists(container);
         }));
 
-        // Atualizar duração
         document.querySelectorAll('.update-duration').forEach(btn => {
             btn.addEventListener('click', async function() {
                 const itemId = this.dataset.item;
@@ -578,7 +572,6 @@ async function loadPlaylists(container) {
             });
         });
 
-        // Remover item
         document.querySelectorAll('.remove-item').forEach(btn => btn.addEventListener('click', () => {
             const pid = btn.closest('.border')?.querySelector('.delete-playlist')?.dataset.id;
             confirmModal('Remover este item?', async () => {
@@ -588,13 +581,11 @@ async function loadPlaylists(container) {
             });
         }));
 
-        // Mover para cima
         document.querySelectorAll('.move-up').forEach(btn => {
             btn.addEventListener('click', async function() {
                 const itemId = parseInt(this.dataset.item);
                 const playlistId = parseInt(this.dataset.playlist);
                 
-                // Buscar items atuais
                 const playlist = await (await fetchAuth(`/playlists/${playlistId}`)).json();
                 const items = playlist.items || [];
                 const currentIndex = items.findIndex(item => item.id === itemId);
@@ -604,7 +595,6 @@ async function loadPlaylists(container) {
                     return;
                 }
                 
-                // Trocar ordem
                 const newOrder = items.map(item => item.id);
                 [newOrder[currentIndex - 1], newOrder[currentIndex]] = [newOrder[currentIndex], newOrder[currentIndex - 1]];
                 
@@ -617,13 +607,11 @@ async function loadPlaylists(container) {
             });
         });
 
-        // Mover para baixo
         document.querySelectorAll('.move-down').forEach(btn => {
             btn.addEventListener('click', async function() {
                 const itemId = parseInt(this.dataset.item);
                 const playlistId = parseInt(this.dataset.playlist);
                 
-                // Buscar items atuais
                 const playlist = await (await fetchAuth(`/playlists/${playlistId}`)).json();
                 const items = playlist.items || [];
                 const currentIndex = items.findIndex(item => item.id === itemId);
@@ -633,7 +621,6 @@ async function loadPlaylists(container) {
                     return;
                 }
                 
-                // Trocar ordem
                 const newOrder = items.map(item => item.id);
                 [newOrder[currentIndex], newOrder[currentIndex + 1]] = [newOrder[currentIndex + 1], newOrder[currentIndex]];
                 
@@ -646,7 +633,6 @@ async function loadPlaylists(container) {
             });
         });
 
-        // Apagar playlist
         document.querySelectorAll('.delete-playlist').forEach(btn => btn.addEventListener('click', () => {
             confirmModal('Remover esta playlist?', async () => {
                 await fetchAuth(`/playlists/${btn.dataset.id}`, { method: 'DELETE' });
@@ -660,7 +646,142 @@ async function loadPlaylists(container) {
     }
 }
 
-// ----- Atribuições (sem alterações) -----
+// ----- AGENDAMENTOS (NOVA SECÇÃO) -----
+async function loadSchedule(container) {
+    try {
+        const [tvs, playlists, schedules] = await Promise.all([
+            fetchAuth('/tvs').then(r => r.json()),
+            fetchAuth('/playlists').then(r => r.json()),
+            fetchAuth('/schedule').then(r => r.json())
+        ]);
+
+        const daysOfWeek = [
+            { value: 'MON', label: 'Segunda-feira' },
+            { value: 'TUE', label: 'Terça-feira' },
+            { value: 'WED', label: 'Quarta-feira' },
+            { value: 'THU', label: 'Quinta-feira' },
+            { value: 'FRI', label: 'Sexta-feira' },
+            { value: 'SAT', label: 'Sábado' },
+            { value: 'SUN', label: 'Domingo' }
+        ];
+
+        const daysOptions = daysOfWeek.map(d => 
+            `<option value="${d.value}">${d.label}</option>`
+        ).join('');
+
+        const tvsOptions = tvs.map(tv => 
+            `<option value="${tv.codigo}">${tv.name} (${tv.codigo})</option>`
+        ).join('');
+
+        const playlistsOptions = playlists.map(p => 
+            `<option value="${p.id}">${p.name}</option>`
+        ).join('');
+
+        container.innerHTML = `
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Agendamentos</h3>
+                <button id="addScheduleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium">
+                    <i class="fas fa-plus"></i> Novo Agendamento
+                </button>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                            <tr>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TV</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Playlist</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dia</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Início</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fim</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ativo</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${schedules.map(s => `
+                                <tr class="border-b border-gray-100 dark:border-gray-700">
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.child_site_name}</td>
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.playlist_name}</td>
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${daysOfWeek.find(d => d.value === s.day_of_week)?.label || s.day_of_week}</td>
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.start_time}</td>
+                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.end_time || '—'}</td>
+                                    <td class="py-3 px-4">
+                                        <span class="px-2 py-1 text-xs rounded-full ${s.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                            ${s.active ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <button class="delete-schedule text-red-500 hover:text-red-700 dark:hover:text-red-400 transition" data-id="${s.id}">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                            ${schedules.length === 0 ? `
+                                <tr>
+                                    <td colspan="7" class="text-center py-8 text-gray-500 dark:text-gray-400">Nenhum agendamento encontrado</td>
+                                </tr>
+                            ` : ''}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        // Modal para criar agendamento
+        document.getElementById('addScheduleBtn')?.addEventListener('click', () => {
+            openModal('Novo Agendamento', [
+                { label: 'TV', id: 'scheduleTV', type: 'select', options: tvsOptions },
+                { label: 'Playlist', id: 'schedulePlaylist', type: 'select', options: playlistsOptions },
+                { label: 'Dia da Semana', id: 'scheduleDay', type: 'select', options: daysOptions },
+                { label: 'Hora de Início (HH:MM)', id: 'scheduleStart', type: 'text', placeholder: '09:00' },
+                { label: 'Hora de Fim (HH:MM, opcional)', id: 'scheduleEnd', type: 'text', placeholder: '18:00' }
+            ], async (values) => {
+                const [child_site_codigo, playlist_id, day_of_week, start_time, end_time] = values;
+                
+                if (!child_site_codigo || !playlist_id || !day_of_week || !start_time) {
+                    showToast('Preencha todos os campos obrigatórios', 'warning');
+                    return;
+                }
+
+                try {
+                    await fetchAuth('/schedule', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            child_site_codigo,
+                            playlist_id: parseInt(playlist_id),
+                            day_of_week,
+                            start_time,
+                            end_time: end_time || null
+                        })
+                    });
+                    showToast('Agendamento criado com sucesso!', 'success');
+                    loadSchedule(container);
+                } catch (err) {
+                    showToast('Erro ao criar agendamento', 'error');
+                }
+            });
+        });
+
+        // Apagar agendamento
+        document.querySelectorAll('.delete-schedule').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const scheduleId = btn.dataset.id;
+                confirmModal('Remover este agendamento?', async () => {
+                    await fetchAuth(`/schedule/${scheduleId}`, { method: 'DELETE' });
+                    showToast('Agendamento removido', 'success');
+                    loadSchedule(container);
+                });
+            });
+        });
+
+    } catch (err) {
+        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+    }
+}
+
+// ----- Atribuições -----
 async function loadAssign(container) {
     try {
         const [tvs, playlists, assignments] = await Promise.all([
@@ -669,7 +790,8 @@ async function loadAssign(container) {
             fetchAuth('/assign').then(r => r.json())
         ]);
         container.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Atribuir Playlist a TV</h3>
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Atribuir Playlist a TV (Fallback)</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Esta atribuição é usada quando não há agendamento ativo para a TV.</p>
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 mb-6">
                 <div class="flex flex-wrap items-end gap-4">
                     <div>

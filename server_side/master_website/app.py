@@ -217,9 +217,8 @@ def update_playlist_item(playlist_id, item_id):
     user_id = request.current_user["user_id"]
     data = request.get_json()
     duration = data.get("duration")
-    
-    if duration is None:
-        return jsonify({"error": "duration é obrigatório"}), 400
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
     
     playlist = get_playlist(playlist_id)
     if not playlist or playlist['user_id'] != user_id:
@@ -233,8 +232,23 @@ def update_playlist_item(playlist_id, item_id):
         conn.close()
         return jsonify({"error": "Item não encontrado"}), 404
     
-    cursor.execute("UPDATE playlist_items SET duration_seconds = ? WHERE id = ?", (duration, item_id))
-    conn.commit()
+    updates = []
+    params = []
+    if duration is not None:
+        updates.append("duration_seconds = ?")
+        params.append(duration)
+    if start_time is not None:
+        updates.append("start_time = ?")
+        params.append(start_time)
+    if end_time is not None:
+        updates.append("end_time = ?")
+        params.append(end_time)
+    
+    if updates:
+        params.append(item_id)
+        cursor.execute(f"UPDATE playlist_items SET {', '.join(updates)} WHERE id = ?", params)
+        conn.commit()
+    
     conn.close()
     
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
@@ -318,7 +332,6 @@ def get_child_playlist(child_site_codigo):
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
     
-    
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT playlist_id FROM assignments WHERE child_site_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site["id"],))
@@ -333,7 +346,22 @@ def get_child_playlist(child_site_codigo):
     if not playlist:
         return jsonify({"error": "Playlist não encontrada"}), 404
     
-    items = get_playlist_items(playlist_id)
+    # Buscar items com filtro de data/hora
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT pi.*, m.url, m.mime_type, m.filename
+        FROM playlist_items pi
+        JOIN media m ON pi.media_id = m.id
+        WHERE pi.playlist_id = ?
+        AND (pi.start_time IS NULL OR pi.start_time <= ?)
+        AND (pi.end_time IS NULL OR pi.end_time >= ?)
+        ORDER BY pi.display_order
+    ''', (playlist_id, now, now))
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    
     playlist['items'] = items
     return jsonify(playlist)
 
