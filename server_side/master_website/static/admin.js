@@ -647,6 +647,7 @@ async function loadPlaylists(container) {
 }
 
 // ----- AGENDAMENTOS (NOVA SECÇÃO) -----
+// ----- AGENDAMENTOS (NOVA SECÇÃO) -----
 async function loadSchedule(container) {
     try {
         const [tvs, playlists, schedules] = await Promise.all([
@@ -729,17 +730,65 @@ async function loadSchedule(container) {
             </div>
         `;
 
-        // Modal para criar agendamento
+        // Modal para criar agendamento - COM SELECTS
         document.getElementById('addScheduleBtn')?.addEventListener('click', () => {
-            openModal('Novo Agendamento', [
-                { label: 'TV', id: 'scheduleTV', type: 'select', options: tvsOptions },
-                { label: 'Playlist', id: 'schedulePlaylist', type: 'select', options: playlistsOptions },
-                { label: 'Dia da Semana', id: 'scheduleDay', type: 'select', options: daysOptions },
-                { label: 'Hora de Início (HH:MM)', id: 'scheduleStart', type: 'text', placeholder: '09:00' },
-                { label: 'Hora de Fim (HH:MM, opcional)', id: 'scheduleEnd', type: 'text', placeholder: '18:00' }
-            ], async (values) => {
-                const [child_site_codigo, playlist_id, day_of_week, start_time, end_time] = values;
-                
+            // Abrir modal com selects em vez de inputs
+            const modal = document.getElementById('customModal');
+            const titleEl = document.getElementById('modalTitle');
+            const body = document.getElementById('modalBody');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+            const closeBtn = document.getElementById('closeModalBtn');
+
+            titleEl.innerText = 'Novo Agendamento';
+            body.innerHTML = `
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TV</label>
+                    <select id="scheduleTV" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Selecione uma TV</option>
+                        ${tvsOptions}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Playlist</label>
+                    <select id="schedulePlaylist" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Selecione uma playlist</option>
+                        ${playlistsOptions}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dia da Semana</label>
+                    <select id="scheduleDay" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Selecione um dia</option>
+                        ${daysOptions}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora de Início</label>
+                    <input type="time" id="scheduleStart" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora de Fim (opcional)</label>
+                    <input type="time" id="scheduleEnd" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                confirmBtn.removeEventListener('click', handleConfirm);
+                cancelBtn.removeEventListener('click', handleCancel);
+                closeBtn.removeEventListener('click', handleCancel);
+            };
+
+            const handleConfirm = async () => {
+                const child_site_codigo = document.getElementById('scheduleTV').value;
+                const playlist_id = document.getElementById('schedulePlaylist').value;
+                const day_of_week = document.getElementById('scheduleDay').value;
+                const start_time = document.getElementById('scheduleStart').value;
+                const end_time = document.getElementById('scheduleEnd').value;
+
                 if (!child_site_codigo || !playlist_id || !day_of_week || !start_time) {
                     showToast('Preencha todos os campos obrigatórios', 'warning');
                     return;
@@ -757,11 +806,18 @@ async function loadSchedule(container) {
                         })
                     });
                     showToast('Agendamento criado com sucesso!', 'success');
+                    cleanup();
                     loadSchedule(container);
                 } catch (err) {
                     showToast('Erro ao criar agendamento', 'error');
                 }
-            });
+            };
+
+            const handleCancel = () => cleanup();
+
+            confirmBtn.addEventListener('click', handleConfirm);
+            cancelBtn.addEventListener('click', handleCancel);
+            closeBtn.addEventListener('click', handleCancel);
         });
 
         // Apagar agendamento

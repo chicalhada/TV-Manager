@@ -35,7 +35,14 @@ from db import (
     delete_child_site,
     delete_media,
     delete_playlist,
-    remove_playlist_item
+    remove_playlist_item,
+    get_active_playlist_for_tv,
+    get_playlist_with_items,
+    add_schedule,
+    get_schedules_by_tv,
+    get_all_schedules,
+    update_schedule,
+    delete_schedule
 )
 
 app = Flask(__name__)
@@ -332,37 +339,20 @@ def get_child_playlist(child_site_codigo):
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
     
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT playlist_id FROM assignments WHERE child_site_id = ? ORDER BY assigned_at DESC LIMIT 1", (child_site["id"],))
-    row = cursor.fetchone()
-    conn.close()
+    # Verificar se há agendamento ativo
+    now = datetime.now()
+    day_of_week = now.strftime("%a").upper()
+    current_time = now.strftime("%H:%M")
     
-    if not row:
+    scheduled_playlist = get_active_playlist_for_tv(child_site["id"], day_of_week, current_time)
+    if scheduled_playlist:
+        return jsonify(scheduled_playlist)
+    
+    # Fallback: atribuição fixa
+    playlist = get_current_playlist_for_tv(child_site["id"], 1)
+    if not playlist:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
     
-    playlist_id = row['playlist_id']
-    playlist = get_playlist(playlist_id)
-    if not playlist:
-        return jsonify({"error": "Playlist não encontrada"}), 404
-    
-    # Buscar items com filtro de data/hora
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT pi.*, m.url, m.mime_type, m.filename
-        FROM playlist_items pi
-        JOIN media m ON pi.media_id = m.id
-        WHERE pi.playlist_id = ?
-        AND (pi.start_time IS NULL OR pi.start_time <= ?)
-        AND (pi.end_time IS NULL OR pi.end_time >= ?)
-        ORDER BY pi.display_order
-    ''', (playlist_id, now, now))
-    items = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    
-    playlist['items'] = items
     return jsonify(playlist)
 
 ################################################################################
@@ -606,6 +596,108 @@ def reorder_playlist_items(playlist_id):
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
 ################################################################################################################
+
+
+# ========== ROTAS PARA AGENDAMENTO ==========
+
+@app.route("/api/schedule", methods=["GET"])
+@login_required
+def get_schedules():
+    user_id = request.current_user["user_id"]
+    schedules = get_all_schedules(user_id)
+    return jsonify(schedules)
+
+@app.route("/api/schedule", methods=["POST"])
+@login_required
+def create_schedule():
+    user_id = request.current_user["user_id"]
+    data = request.get_json()
+    
+    child_site_codigo = data.get("child_site_codigo")
+    playlist_id = data.get("playlist_id")
+    day_of_week = data.get("day_of_week")
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
+    active = data.get("active", 1)
+    
+    if not child_site_codigo or not playlist_id or not day_of_week or not start_time:
+        return jsonify({"error": "child_site_codigo, playlist_id, day_of_week e start_time são obrigatórios"}), 400
+    
+    child_site = get_child_site_by_codigo(child_site_codigo)
+    if not child_site:
+        return jsonify({"error": "TV não encontrada"}), 404
+    
+    playlist = get_playlist(playlist_id)
+    if not playlist or playlist['user_id'] != user_id:
+        return jsonify({"error": "Playlist não encontrada"}), 404
+    
+    schedule_id = add_schedule(child_site["id"], playlist_id, day_of_week.upper(), start_time, end_time, active)
+    
+    return jsonify({"success": True, "schedule_id": schedule_id}), 201
+
+@app.route("/api/schedule/<int:schedule_id>", methods=["PUT"])
+@login_required
+def update_schedule_route(schedule_id):
+    user_id = request.current_user["user_id"]
+    data = request.get_json()
+    
+    schedules = get_all_schedules(user_id)
+    schedule_exists = any(s['id'] == schedule_id for s in schedules)
+    if not schedule_exists:
+        return jsonify({"error": "Agendamento não encontrado"}), 404
+    
+    child_site_codigo = data.get("child_site_codigo")
+    playlist_id = data.get("playlist_id")
+    day_of_week = data.get("day_of_week")
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
+    active = data.get("active")
+    
+    child_site_id = None
+    if child_site_codigo:
+        child_site = get_child_site_by_codigo(child_site_codigo)
+        if not child_site:
+            return jsonify({"error": "TV não encontrada"}), 404
+        child_site_id = child_site["id"]
+    
+    if playlist_id:
+        playlist = get_playlist(playlist_id)
+        if not playlist or playlist['user_id'] != user_id:
+            return jsonify({"error": "Playlist não encontrada"}), 404
+    
+    update_schedule(
+        schedule_id,
+        child_site_id=child_site_id,
+        playlist_id=playlist_id,
+        day_of_week=day_of_week.upper() if day_of_week else None,
+        start_time=start_time,
+        end_time=end_time,
+        active=active
+    )
+    
+    return jsonify({"success": True}), 200
+
+@app.route("/api/schedule/<int:schedule_id>", methods=["DELETE"])
+@login_required
+def delete_schedule_route(schedule_id):
+    user_id = request.current_user["user_id"]
+    
+    schedules = get_all_schedules(user_id)
+    schedule_exists = any(s['id'] == schedule_id for s in schedules)
+    if not schedule_exists:
+        return jsonify({"error": "Agendamento não encontrado"}), 404
+    
+    delete_schedule(schedule_id)
+    return jsonify({"success": True}), 200
+
+
+
+
+
+###############################################################################################################
+
+
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
