@@ -152,35 +152,18 @@ body::before {
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Botão principal */
-.btn-primary {
-    margin-top: 28px;
-    padding: 16px 48px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    border: none;
-    border-radius: 60px;
-    color: #fff;
-    font-weight: 600;
-    font-size: 1.1rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
-    display: inline-flex;
+/* Botão de autoplay - mensagem automática */
+.autoplay-status {
+    margin-top: 20px;
+    color: #6366f1;
+    font-size: 0.9rem;
+    display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
-.btn-primary:hover {
-    transform: scale(1.03);
-    box-shadow: 0 6px 30px rgba(99, 102, 241, 0.5);
-}
-
-.btn-primary:active {
-    transform: scale(0.97);
-}
-
-.btn-primary i {
-    font-size: 1.2rem;
+.autoplay-status i {
+    font-size: 1rem;
 }
 
 /* Rodapé da tela inicial */
@@ -253,7 +236,7 @@ body::before {
 }
 
 /* ============================================================
-   CONTROLES DO PLAYER
+   CONTROLES DO PLAYER (aparecem com o mouse)
    ============================================================ */
 .fullscreen-controls {
     position: fixed;
@@ -331,7 +314,7 @@ body::before {
     font-size: 1.2rem;
 }
 
-/* Overlay de "Clique para tocar" (se autoplay falhar) */
+/* Overlay de "Clique para tocar" (apenas se autoplay falhar) */
 .play-overlay {
     position: absolute;
     top: 0;
@@ -375,10 +358,6 @@ body::before {
     .tv-mode h2 {
         font-size: 2rem;
     }
-    .btn-primary {
-        padding: 14px 32px;
-        font-size: 1rem;
-    }
     .exit-fullscreen-btn {
         bottom: 20px;
         right: 20px;
@@ -412,11 +391,5 @@ body::before {
     .card {
         padding: 24px 16px;
         border-radius: 32px;
-    }
-    .btn-primary {
-        padding: 12px 24px;
-        font-size: 0.9rem;
-        width: 100%;
-        justify-content: center;
     }
 }

@@ -1,5 +1,5 @@
 // ============================================================
-// JAVASCRIPT COMPLETO - CÓDIGO FIXO + AUTOPLAY + ÁUDIO CORRIGIDO
+// JAVASCRIPT COMPLETO - AUTOPLAY TOTAL
 // ============================================================
 
 const API_BASE = "http://127.0.0.1:5000";
@@ -42,7 +42,7 @@ let estaEmFullscreen = false;
 let fullscreenContainer = null;
 let temporizadorMouse = null;
 let playerAtivo = false;
-let autoplayIniciado = false;
+let iniciadoAutomaticamente = false;
 
 // ============================================================
 // 2. ID FIXO DO DISPOSITIVO
@@ -162,7 +162,6 @@ async function buscarPlaylist() {
 function ativarPlayer() {
     console.log("🎬 Ativando player automaticamente...");
     playerAtivo = true;
-    autoplayIniciado = true;
     
     const appRoot = document.getElementById('appRoot');
     if (appRoot) appRoot.style.display = 'none';
@@ -170,7 +169,10 @@ function ativarPlayer() {
     const playerContainer = document.getElementById('playerContainer');
     if (playerContainer) playerContainer.classList.add('active');
     
-    iniciarReproducao();
+    // Iniciar reprodução imediatamente
+    setTimeout(() => {
+        iniciarReproducao();
+    }, 500);
     
     if (intervaloPolling) clearInterval(intervaloPolling);
     intervaloPolling = setInterval(atualizarPlaylist, 30000);
@@ -179,9 +181,8 @@ function ativarPlayer() {
 function voltarTelaInicial() {
     console.log("🏠 Voltar à tela inicial");
     playerAtivo = false;
-    autoplayIniciado = false;
-    
-    pararReproducaoCompleta();
+    iniciadoAutomaticamente = false;
+    pararReproducao();
     
     if (estaEmFullscreen) sairFullscreen();
     
@@ -199,7 +200,7 @@ function voltarTelaInicial() {
         intervaloPolling = null; 
     }
     
-    renderizarUI(null, "Aguardando playlist...");
+    renderizarUI(null, "⏳ Aguardando playlist...");
 }
 
 // ============================================================
@@ -217,18 +218,11 @@ function entrarFullscreen(elemento) {
         playerContainer.appendChild(container);
     }
 
-    const oldVideo = container.querySelector('video');
-    if (oldVideo) {
-        oldVideo.pause();
-        oldVideo.currentTime = 0;
-        oldVideo.src = '';
-        oldVideo.load();
-        oldVideo.remove();
-    }
-    
-    const oldContent = container.querySelector('img, .no-media-fullscreen, .play-overlay');
-    if (oldContent) oldContent.remove();
+    // Remove conteúdo antigo
+    const old = container.querySelector('video, img, .no-media-fullscreen, .play-overlay');
+    if (old) old.remove();
 
+    // Clona o elemento
     const clone = elemento.cloneNode(true);
     clone.style.width = '100vw';
     clone.style.height = '100vh';
@@ -238,6 +232,7 @@ function entrarFullscreen(elemento) {
     clone.style.borderRadius = '0';
     container.appendChild(clone);
 
+    // Se for vídeo, FORÇA AUTOPLAY
     if (clone.tagName === 'VIDEO') {
         const video = clone;
         video.muted = false;
@@ -246,42 +241,11 @@ function entrarFullscreen(elemento) {
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
         
-        const playPromise = video.play();
-        if (playPromise !== undefined) {
-            playPromise.then(() => {
-                console.log("▶️ Vídeo em reprodução automática");
-            }).catch((error) => {
-                console.log("⚠️ Autoplay bloqueado, mostrando overlay");
-                const overlay = document.createElement('div');
-                overlay.className = 'play-overlay';
-                overlay.innerHTML = '<i class="fas fa-play-circle"></i> Clique para tocar';
-                overlay.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    background: rgba(0,0,0,0.4);
-                    z-index: 9999;
-                    cursor: pointer;
-                    color: #fff;
-                    font-size: 1.2rem;
-                    gap: 15px;
-                `;
-                overlay.querySelector('i').style.fontSize = '4rem';
-                overlay.addEventListener('click', function() {
-                    video.play();
-                    this.remove();
-                });
-                container.appendChild(overlay);
-            });
-        }
+        // TENTAR AUTOPLAY IMEDIATAMENTE
+        tryPlayVideo(video, container);
     }
 
+    // Botão de sair
     let exitBtn = document.getElementById('exitFullscreenBtn');
     if (!exitBtn) {
         exitBtn = document.createElement('button');
@@ -295,6 +259,7 @@ function entrarFullscreen(elemento) {
         container.appendChild(exitBtn);
     }
 
+    // Controles inferiores
     let controls = document.getElementById('fullscreenControls');
     if (!controls) {
         controls = document.createElement('div');
@@ -307,9 +272,11 @@ function entrarFullscreen(elemento) {
         container.appendChild(controls);
     }
 
+    // Mostrar controles ao mexer o mouse
     container.addEventListener('mousemove', mostrarControles);
     container.addEventListener('mouseleave', ocultarControles);
 
+    // Ativar fullscreen da API
     if (!estaEmFullscreen) {
         if (container.requestFullscreen) {
             container.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
@@ -319,6 +286,69 @@ function entrarFullscreen(elemento) {
     }
 
     mostrarControles();
+}
+
+// FUNÇÃO PARA TENTAR AUTOPLAY REPETIDAS VEZES
+function tryPlayVideo(video, container, tentativas = 0) {
+    if (tentativas > 10) {
+        console.log("⚠️ Falha no autoplay após 10 tentativas");
+        mostrarOverlayPlay(video, container);
+        return;
+    }
+    
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            console.log("✅ Vídeo em reprodução automática!");
+        }).catch((error) => {
+            console.log(`⚠️ Tentativa ${tentativas + 1}: Autoplay bloqueado, tentando novamente...`);
+            setTimeout(() => {
+                tryPlayVideo(video, container, tentativas + 1);
+            }, 500);
+        });
+    }
+}
+
+function mostrarOverlayPlay(video, container) {
+    const overlay = document.createElement('div');
+    overlay.className = 'play-overlay';
+    overlay.innerHTML = '<i class="fas fa-play-circle"></i> Clique para tocar';
+    overlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0,0,0,0.3);
+        z-index: 9999;
+        cursor: pointer;
+        color: #fff;
+        font-size: 1.2rem;
+        gap: 15px;
+    `;
+    overlay.querySelector('i').style.fontSize = '4rem';
+    
+    overlay.addEventListener('click', function() {
+        video.play();
+        this.remove();
+    });
+    
+    // Tenta novamente após 2 segundos
+    setTimeout(() => {
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                overlay.remove();
+                console.log("✅ Vídeo iniciado após tentativa!");
+            }).catch(() => {});
+        }
+    }, 2000);
+    
+    container.appendChild(overlay);
 }
 
 function sairFullscreen() {
@@ -352,6 +382,7 @@ function ocultarControles() {
     if (temporizadorMouse) { clearTimeout(temporizadorMouse); temporizadorMouse = null; }
 }
 
+// Funções globais para os botões
 window.pauseResume = function() {
     const container = document.getElementById('fullscreenContainer');
     if (!container) return;
@@ -367,13 +398,7 @@ window.pauseResume = function() {
 };
 
 window.proximoItem = function() {
-    pararAudioAtual();
-    
-    if (temporizadorAtual) { 
-        clearTimeout(temporizadorAtual); 
-        temporizadorAtual = null; 
-    }
-    
+    if (temporizadorAtual) { clearTimeout(temporizadorAtual); temporizadorAtual = null; }
     if (reprodutorAtivo && itemsPlaylist.length > 0) {
         if (indiceAtual >= itemsPlaylist.length) indiceAtual = 0;
         const item = itemsPlaylist[indiceAtual];
@@ -388,69 +413,22 @@ window.proximoItem = function() {
 };
 
 // ============================================================
-// 7. REPRODUÇÃO DE ITENS (COM LIMPEZA DE ÁUDIO)
+// 7. REPRODUÇÃO DE ITENS
 // ============================================================
-
-function pararAudioAtual() {
-    if (elementoVideoAtual) {
-        console.log("🔇 Parando áudio do vídeo anterior...");
-        elementoVideoAtual.pause();
-        elementoVideoAtual.currentTime = 0;
-        elementoVideoAtual.src = '';
-        elementoVideoAtual.load();
-        elementoVideoAtual = null;
-    }
-    
-    const container = document.getElementById('fullscreenContainer');
-    if (container) {
-        const video = container.querySelector('video');
-        if (video) {
-            console.log("🔇 Parando áudio do container...");
-            video.pause();
-            video.currentTime = 0;
-            video.src = '';
-            video.load();
-        }
-        const overlays = container.querySelectorAll('.play-overlay');
-        overlays.forEach(overlay => overlay.remove());
-    }
-}
-
-function pararReproducaoCompleta() {
-    if (temporizadorAtual) { 
-        clearTimeout(temporizadorAtual); 
-        temporizadorAtual = null; 
-    }
-    
-    pararAudioAtual();
-    
-    reprodutorAtivo = false;
-    
-    const container = document.getElementById('fullscreenContainer');
-    if (container) {
-        container.innerHTML = '';
-    }
-}
-
 function pararReproducao() {
     if (temporizadorAtual) { 
         clearTimeout(temporizadorAtual); 
         temporizadorAtual = null; 
     }
-    
-    pararAudioAtual();
-    
+    if (elementoVideoAtual) { 
+        elementoVideoAtual.pause(); 
+        elementoVideoAtual = null; 
+    }
     reprodutorAtivo = false;
 }
 
-// ============================================================
-// FUNÇÃO PRINCIPAL - REPRODUZIR ITEM (COMPLETA)
-// ============================================================
 function reproduzirItem(item, onTerminar) {
     console.log("🎬 Reproduzindo item:", item);
-    
-    // PARAR ÁUDIO ANTERIOR ANTES DE CARREGAR NOVO
-    pararAudioAtual();
     
     const playerContainer = document.getElementById('playerContainer');
     if (!playerContainer) {
@@ -472,18 +450,9 @@ function reproduzirItem(item, onTerminar) {
     const isVideo = mimeType.startsWith('video/') || url.match(/\.(mp4|webm|mov|avi|mkv)$/i);
     const isImage = mimeType.startsWith('image/') || url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i);
 
-    // Remove conteúdo antigo e GARANTE QUE O ÁUDIO PARE
-    const oldVideo = container.querySelector('video');
-    if (oldVideo) {
-        oldVideo.pause();
-        oldVideo.currentTime = 0;
-        oldVideo.src = '';
-        oldVideo.load();
-        oldVideo.remove();
-    }
-    
-    const oldContent = container.querySelector('img, .no-media-fullscreen, .play-overlay');
-    if (oldContent) oldContent.remove();
+    // Remove conteúdo antigo
+    const old = container.querySelector('video, img, .no-media-fullscreen, .play-overlay');
+    if (old) old.remove();
 
     if (isVideo) {
         console.log("🎥 Reproduzindo vídeo:", url);
@@ -507,57 +476,20 @@ function reproduzirItem(item, onTerminar) {
         };
 
         video.oncanplay = function() {
-            console.log("▶️ Vídeo pronto para tocar");
-            const playPromise = video.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log("✅ Vídeo em reprodução");
-                }).catch((error) => {
-                    console.log("⚠️ Autoplay bloqueado:", error);
-                    const overlay = document.createElement('div');
-                    overlay.className = 'play-overlay';
-                    overlay.innerHTML = '<i class="fas fa-play-circle"></i> Clique para tocar';
-                    overlay.style.cssText = `
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        background: rgba(0,0,0,0.5);
-                        z-index: 9999;
-                        cursor: pointer;
-                        color: #fff;
-                        font-size: 1.2rem;
-                        gap: 15px;
-                    `;
-                    overlay.querySelector('i').style.fontSize = '4rem';
-                    overlay.addEventListener('click', function() {
-                        video.play();
-                        this.remove();
-                    });
-                    container.appendChild(overlay);
-                });
-            }
+            console.log("▶️ Vídeo pronto, iniciando autoplay...");
+            tryPlayVideo(video, container);
         };
 
         video.onended = () => {
             console.log("⏹️ Vídeo terminou");
-            if (elementoVideoAtual === video) {
-                elementoVideoAtual = null;
-            }
+            elementoVideoAtual = null;
             onTerminar();
         };
 
         video.onerror = (e) => {
             console.error("❌ Erro no vídeo:", e);
             console.error("URL do vídeo:", videoUrl);
-            if (elementoVideoAtual === video) {
-                elementoVideoAtual = null;
-            }
+            elementoVideoAtual = null;
             setTimeout(onTerminar, 2000);
         };
 
@@ -617,9 +549,6 @@ function reproduzirItem(item, onTerminar) {
     }
 }
 
-// ============================================================
-// 8. LOOP DE REPRODUÇÃO
-// ============================================================
 function avancarLoop() {
     if (!reprodutorAtivo) return;
     if (indiceAtual >= itemsPlaylist.length) indiceAtual = 0;
@@ -629,7 +558,7 @@ function avancarLoop() {
 }
 
 function iniciarReproducao() {
-    pararReproducaoCompleta();
+    pararReproducao();
     
     if (!itemsPlaylist || itemsPlaylist.length === 0) {
         console.log("📭 Nenhum item para reproduzir");
@@ -648,8 +577,6 @@ function iniciarReproducao() {
             container.className = 'fullscreen-mode';
             container.id = 'fullscreenContainer';
             playerContainer.appendChild(container);
-        } else {
-            container.innerHTML = '';
         }
     }
     
@@ -657,7 +584,7 @@ function iniciarReproducao() {
 }
 
 // ============================================================
-// 9. UI
+// 8. UI - COM AUTOPLAY TOTAL
 // ============================================================
 function renderizarUI(playlist, statusMensagem) {
     const root = document.getElementById('appRoot');
@@ -678,80 +605,4 @@ function renderizarUI(playlist, statusMensagem) {
             <div class="device-id">ID: ${deviceId.substring(0, 20)}...</div>
             <div class="tv-status" id="tvStatusMsg">
                 ${statusMensagem || (temPlaylist ? '✅ Playlist disponível! Iniciando automaticamente...' : '⏳ Aguardando playlist...')}
-            </div>
-            ${temPlaylist ? `
-                <button class="btn-primary" onclick="ativarPlayer()">
-                    <i class="fas fa-play"></i> INICIAR REPRODUÇÃO
-                </button>
-            ` : `
-                <p style="color: #64748b; margin-top: 20px; font-size: 0.9rem;">
-                    <i class="fas fa-circle-notch fa-spin"></i> Aguardando atribuição de playlist...
-                </p>
-            `}
-            <div class="footer-note">
-                <i class="fas fa-lock"></i> Código permanente para este dispositivo
-            </div>
-        </div>
-    `;
-}
-
-// ============================================================
-// 10. POLLING E INICIALIZAÇÃO
-// ============================================================
-async function atualizarPlaylist() {
-    console.log("🔄 Atualizando playlist...");
-    
-    const playlist = await buscarPlaylist();
-    
-    if (playlist && playlist.items && playlist.items.length > 0) {
-        itemsPlaylist = playlist.items;
-        console.log("📋 Playlist carregada:", itemsPlaylist.length, "itens");
-        
-        if (!playerAtivo) {
-            renderizarUI(playlist, '✅ Playlist disponível! Iniciando automaticamente...');
-            setTimeout(() => {
-                ativarPlayer();
-            }, 1500);
-        } else {
-            iniciarReproducao();
-        }
-    } else {
-        if (!playerAtivo) {
-            renderizarUI(null, '⏳ Aguardando playlist...');
-        } else {
-            voltarTelaInicial();
-        }
-    }
-}
-
-// ============================================================
-// 11. INICIALIZAÇÃO
-// ============================================================
-(async function iniciar() {
-    console.log("🚀 Inicializando TV Manager...");
-    
-    CODIGO_TV = await obterOuCriarCodigo();
-    console.log("🔑 CÓDIGO FIXO:", CODIGO_TV);
-    
-    await registarTV();
-    console.log("📡 TV registada no servidor");
-
-    const playerContainer = document.createElement('div');
-    playerContainer.id = 'playerContainer';
-    playerContainer.className = 'player-container';
-    document.body.appendChild(playerContainer);
-
-    await atualizarPlaylist();
-
-    document.addEventListener('fullscreenchange', function() {
-        if (!document.fullscreenElement && estaEmFullscreen) {
-            voltarTelaInicial();
-        }
-    });
-
-    if (intervaloPolling) clearInterval(intervaloPolling);
-    intervaloPolling = setInterval(atualizarPlaylist, 30000);
-
-    console.log("✅ TV Manager inicializado com sucesso!");
-    console.log("🎯 Autoplay ativado - iniciará automaticamente quando a playlist estiver disponível");
-})();
+            </
