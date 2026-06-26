@@ -9,10 +9,11 @@ from flask import send_from_directory
 import bcrypt
 import jwt
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from db import (
     add_child_site,
+    get_current_active_playlist_for_tv,
     list_child_sites,
     add_media,
     list_media,
@@ -42,7 +43,8 @@ from db import (
     get_schedules_by_tv,
     get_all_schedules,
     update_schedule,
-    delete_schedule
+    delete_schedule,
+    get_child_site_by_id
 )
 
 app = Flask(__name__)
@@ -111,6 +113,18 @@ def serve_css():
 def serve_js():
     return send_from_directory('static', 'admin.js')
 
+@app.route('/tv')
+def tv():
+    return send_from_directory('static', 'tv.html')
+
+@app.route('/tv_design.css')
+def serve_tv_css():
+    return send_from_directory('static', 'tv_design.css')
+
+@app.route('/tv_script.js')
+def serve_tv_js():
+    return send_from_directory('static', 'tv_script.js')
+
 ########################################################################################
 
 @app.route("/api/health")
@@ -119,19 +133,17 @@ def health():
 
 ################################################################################
 
+# Substituir a rota atual por esta:
 @app.route("/api/tvs", methods=["GET"])
 @login_required
 def get_tvs():
+    user_id = request.current_user["user_id"]
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM child_sites ORDER BY id")
+    cursor.execute("SELECT * FROM child_sites WHERE user_id = ? ORDER BY id", (user_id,))
     rows = cursor.fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
-
-@app.route('/tv')
-def tv():
-    return send_from_directory('static', 'tv.html')
 
 @app.route("/api/tvs", methods=["POST"])
 @login_required
@@ -158,6 +170,7 @@ def register_tv():
     
     tv = get_child_site_by_codigo(codigo)
     if not tv:
+        # Registrar com user_id = 1 (utilizador padrão) - na prática deveria ser o admin atual
         child_id = add_child_site(f"TV {codigo}", 1, None, codigo)
         tv = get_child_site_by_codigo(codigo)
     
@@ -281,7 +294,7 @@ def upload_file():
         filepath = os.path.join(upload_folder, filename)
         file.save(filepath)
         
-        url = f"/{upload_folder}{filename}"
+        url = f"/uploads/{filename}"
         mime_type = file.mimetype
         media_id = add_media(filename, url, mime_type, user_id)
         
@@ -328,10 +341,7 @@ def assign_playlist():
     'playlist_id': playlist_id
     }, room=child_site_codigo)
 
-
     return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
-
-
 
 @app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
 def get_child_playlist(child_site_codigo):
@@ -348,8 +358,7 @@ def get_child_playlist(child_site_codigo):
     if scheduled_playlist:
         return jsonify(scheduled_playlist)
     
-    # Fallback: atribuição fixa
-    playlist = get_current_playlist_for_tv(child_site["id"], 1)
+    playlist = get_current_playlist_for_tv(child_site["id"], child_site["user_id"])
     if not playlist:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
     
@@ -360,9 +369,11 @@ def get_child_playlist(child_site_codigo):
 @app.route("/api/tvs/<int:child_id>", methods=["DELETE"])
 @login_required
 def delete_tv(child_id):
+    user_id = request.current_user["user_id"]
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM child_sites WHERE id = ?", (child_id,))
+    # Verificar se a TV pertence ao utilizador
+    cursor.execute("DELETE FROM child_sites WHERE id = ? AND user_id = ?", (child_id, user_id))
     conn.commit()
     conn.close()
     return jsonify({"success": True, "message": "TV removida com sucesso"}), 200
@@ -374,6 +385,8 @@ def delete_media(media_id):
     media = get_media(media_id)
     if not media:
         return jsonify({"error": "Media não encontrado"}), 404
+    if media['user_id'] != user_id:
+        return jsonify({"error": "Não autorizado"}), 403
     
     filepath = os.path.join(upload_folder, media["filename"])
     if os.path.exists(filepath):
@@ -406,7 +419,12 @@ def delete_playlist_item(playlist_id, item_id):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM playlist_items WHERE id = ? AND playlist_id = ?", (item_id, playlist_id))
+    # Verificar se o item pertence a uma playlist do utilizador
+    cursor.execute("""
+        SELECT pi.* FROM playlist_items pi
+        JOIN playlists p ON pi.playlist_id = p.id
+        WHERE pi.id = ? AND pi.playlist_id = ? AND p.user_id = ?
+    """, (item_id, playlist_id, user_id))
     item = cursor.fetchone()
     if not item:
         conn.close()
@@ -454,7 +472,7 @@ def login():
     if not user:
         return jsonify({"error": "Credenciais inválidas"}), 401
 
-    expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    expiration = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     token = jwt.encode({
         "user_id": user["id"],
         "username": user["username"],
@@ -562,10 +580,8 @@ def handle_register_tv(data):
         print(f"TV {codigo} registada na sala {codigo}")
         emit('registered', {'status': 'ok', 'codigo': codigo}, room=request.sid)
 
-
 ################################################################################################################
 
-# ========== ROTA PARA REORDENAR ITENS DA PLAYLIST ==========
 @app.route("/api/playlists/<int:playlist_id>/items/reorder", methods=["POST"])
 @login_required
 def reorder_playlist_items(playlist_id):
@@ -597,9 +613,6 @@ def reorder_playlist_items(playlist_id):
 
 ################################################################################################################
 
-
-# ========== ROTAS PARA AGENDAMENTO ==========
-
 @app.route("/api/schedule", methods=["GET"])
 @login_required
 def get_schedules():
@@ -626,6 +639,8 @@ def create_schedule():
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
+    if child_site['user_id'] != user_id:
+        return jsonify({"error": "Não autorizado"}), 403
     
     playlist = get_playlist(playlist_id)
     if not playlist or playlist['user_id'] != user_id:
@@ -658,6 +673,8 @@ def update_schedule_route(schedule_id):
         child_site = get_child_site_by_codigo(child_site_codigo)
         if not child_site:
             return jsonify({"error": "TV não encontrada"}), 404
+        if child_site['user_id'] != user_id:
+            return jsonify({"error": "Não autorizado"}), 403
         child_site_id = child_site["id"]
     
     if playlist_id:
@@ -690,14 +707,34 @@ def delete_schedule_route(schedule_id):
     delete_schedule(schedule_id)
     return jsonify({"success": True}), 200
 
-
-
-
-
 ###############################################################################################################
 
+@app.route("/api/tvs/status", methods=["GET"])
+@login_required
+def get_tvs_status():
+    user_id = request.current_user["user_id"]
+    tvs = list_child_sites(user_id)
+    result = []
+    for tv in tvs:
+        playlist = get_current_active_playlist_for_tv(tv["id"])
+        if playlist:
+            playlist_info = {
+                "id": playlist["id"],
+                "name": playlist["name"],
+                "items_count": len(playlist.get("items", []))
+            }
+        else:
+            playlist_info = None
+        result.append({
+            "id": tv["id"],
+            "name": tv["name"],
+            "codigo": tv["codigo"],
+            "ip": tv["ip"],
+            "active_playlist": playlist_info
+        })
+    return jsonify(result)
 
-
+###############################################################################################################
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)

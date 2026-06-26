@@ -28,7 +28,9 @@ def init_db():
             name TEXT NOT NULL,
             ip TEXT,
             codigo TEXT UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cursor.execute('''
@@ -37,14 +39,18 @@ def init_db():
             filename TEXT NOT NULL,
             url TEXT NOT NULL,
             mime_type TEXT,
-            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_id INTEGER NOT NULL,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS playlists (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cursor.execute('''
@@ -64,8 +70,10 @@ def init_db():
             child_site_id INTEGER NOT NULL,
             playlist_id INTEGER NOT NULL,
             assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER NOT NULL,
             FOREIGN KEY (child_site_id) REFERENCES child_sites(id) ON DELETE CASCADE,
-            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+            FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cursor.execute('''
@@ -191,9 +199,6 @@ def get_media(media_id):
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
-
-def get_media_by_id(media_id):
-    return get_media(media_id)
 
 def delete_media(media_id):
     conn = get_connection()
@@ -421,45 +426,13 @@ def get_active_playlist_for_tv(child_site_id, day_of_week, current_time):
         return get_playlist_with_items(row['playlist_id'])
     return None
 
+def get_current_active_playlist_for_tv(child_site_id):
+    from datetime import datetime
+    now = datetime.now()
+    day_of_week = now.strftime("%a").upper()
+    current_time = now.strftime("%H:%M")
+    return get_active_playlist_for_tv(child_site_id, day_of_week, current_time)
+
 if __name__ == '__main__':
     init_db()
-
-    conn = get_connection()
-    conn.execute("DELETE FROM playlist_items")
-    conn.execute("DELETE FROM assignments")
-    conn.execute("DELETE FROM media")
-    conn.execute("DELETE FROM playlists")
-    conn.execute("DELETE FROM child_sites")
-    conn.execute("DELETE FROM tv_schedule")
-    conn.commit()
-    conn.close()
-
-    user_id = 1
-
-    tv_id = add_child_site("TV Sala", user_id, "192.168.1.10", "1234")
-    print(f"✅ TV adicionada com id: {tv_id}")
-
-    media_id = add_media("demo.jpg", "/uploads/demo.jpg", "image/jpeg", user_id)
-    print(f"✅ Media adicionada com id: {media_id}")
-
-    playlist_id = add_playlist("Playlist Teste", user_id)
-    item_id = add_playlist_item(playlist_id, media_id, 15)
-    print(f"✅ Playlist criada id: {playlist_id}, item id: {item_id}")
-
-    assign_playlist_to_tv(tv_id, playlist_id, user_id)
-    print("✅ Playlist atribuída à TV")
-
-    # Adicionar agendamento de exemplo
-    schedule_id = add_schedule(tv_id, playlist_id, "MON", "09:00", "18:00")
-    print(f"✅ Agendamento criado id: {schedule_id}")
-
-    delete_media(media_id)
-    print("🗑️ Media removida")
-
-    delete_playlist(playlist_id)
-    print("🗑️ Playlist removida")
-
-    delete_child_site(tv_id)
-    print("🗑️ TV removida")
-
-    print("\n✅ Testes concluídos. Todas as funções estão operacionais.")
+    print("✅ Banco de dados criado/atualizado.")

@@ -102,7 +102,7 @@ function confirmModal(message, onConfirm) {
     closeBtn.addEventListener('click', handleCancel);
 }
 
-// ----- Lightbox para imagens e vídeos -----
+// ----- Lightbox para imagens e vídeos (CORRIGIDO) -----
 function showLightbox(url) {
     const lightbox = document.getElementById('lightbox');
     const img = document.getElementById('lightboxImage');
@@ -112,19 +112,32 @@ function showLightbox(url) {
     videoContainer.style.display = 'none';
     videoContainer.innerHTML = '';
 
-    const isVideo = url.match(/\.(mp4|webm|ogg|mov|avi)$/i);
+    // Garantir URL absoluta se for relativa
+    const fullUrl = url.startsWith('http') ? url : `http://localhost:5000${url}`;
+
+    const isVideo = /\.(mp4|webm|ogg|mov|avi)$/i.test(fullUrl);
     
     if (isVideo) {
         videoContainer.style.display = 'block';
         const video = document.createElement('video');
-        video.src = url;
+        video.src = fullUrl;
         video.controls = true;
         video.autoplay = true;
         video.className = 'max-w-full max-h-[80vh] rounded-lg';
+        video.style.maxWidth = '90vw';
+        video.style.maxHeight = '80vh';
         videoContainer.appendChild(video);
+        
+        // Tentar reproduzir automaticamente
+        video.play().catch(() => {
+            // Se falhar, o utilizador pode clicar no vídeo para reproduzir
+            video.addEventListener('click', () => video.play());
+        });
     } else {
         img.style.display = 'block';
-        img.src = url;
+        img.src = fullUrl;
+        img.alt = 'Pré-visualização';
+        img.className = 'max-w-full max-h-[80vh] object-contain rounded-lg';
     }
     
     lightbox.classList.remove('hidden');
@@ -267,8 +280,20 @@ async function loadDashboard(container) {
 // ----- TVs -----
 async function loadTVs(container) {
     try {
-        const tvs = await (await fetchAuth('/tvs')).json();
-        let filtered = tvs;
+        const [tvs, statuses] = await Promise.all([
+            fetchAuth('/tvs').then(r => r.json()),
+            fetchAuth('/tvs/status').then(r => r.json())
+        ]);
+
+        const statusMap = {};
+        statuses.forEach(s => statusMap[s.id] = s.active_playlist);
+
+        const tvsWithStatus = tvs.map(tv => ({
+            ...tv,
+            active_playlist: statusMap[tv.id] || null
+        }));
+
+        let filtered = tvsWithStatus;
 
         const searchInput = document.createElement('input');
         searchInput.placeholder = '🔍 Pesquisar televisão...';
@@ -278,7 +303,7 @@ async function loadTVs(container) {
             const tbody = document.querySelector('#tvsTable tbody');
             if (!tbody) return;
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-500 dark:text-gray-400">Nenhuma televisão encontrada</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500 dark:text-gray-400">Nenhuma televisão encontrada</td></tr>`;
                 return;
             }
             tbody.innerHTML = data.map(tv => `
@@ -286,6 +311,9 @@ async function loadTVs(container) {
                     <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">#${tv.id}</td>
                     <td class="py-3 px-4 font-medium text-gray-800 dark:text-white">${tv.name}</td>
                     <td class="py-3 px-4 text-sm font-mono text-gray-600 dark:text-gray-300">${tv.codigo || '—'}</td>
+                    <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
+                        ${tv.active_playlist ? `<span class="text-emerald-600 dark:text-emerald-400 font-medium">${tv.active_playlist.name}</span> <span class="text-xs text-gray-400">(${tv.active_playlist.items_count} itens)</span>` : '<span class="text-gray-400">Nenhuma</span>'}
+                    </td>
                     <td class="py-3 px-4">
                         <button class="delete-tv text-red-500 hover:text-red-700 dark:hover:text-red-400 transition text-sm font-medium" data-id="${tv.id}">
                             <i class="fas fa-trash-alt"></i>
@@ -293,6 +321,7 @@ async function loadTVs(container) {
                     </td>
                 </tr>
             `).join('');
+
             document.querySelectorAll('.delete-tv').forEach(btn => btn.addEventListener('click', () => {
                 confirmModal('Tem certeza que deseja remover esta TV?', async () => {
                     await fetchAuth(`/tvs/${btn.dataset.id}`, { method: 'DELETE' });
@@ -312,7 +341,7 @@ async function loadTVs(container) {
             <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center gap-3">
                     <div class="flex-1 min-w-[200px]">${searchInput.outerHTML}</div>
-                    <span class="text-sm text-gray-400 dark:text-gray-500">${tvs.length} televisões</span>
+                    <span class="text-sm text-gray-400 dark:text-gray-500">${tvsWithStatus.length} televisões</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full" id="tvsTable">
@@ -321,6 +350,7 @@ async function loadTVs(container) {
                                 <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
                                 <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nome</th>
                                 <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Playlist Atual</th>
                                 <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
@@ -333,14 +363,15 @@ async function loadTVs(container) {
         const search = document.querySelector('input[placeholder="🔍 Pesquisar televisão..."]');
         search.addEventListener('input', function() {
             const term = this.value.toLowerCase().trim();
-            const filteredData = tvs.filter(tv => 
+            const filteredData = tvsWithStatus.filter(tv => 
                 tv.name.toLowerCase().includes(term) || 
-                (tv.codigo && tv.codigo.toLowerCase().includes(term))
+                (tv.codigo && tv.codigo.toLowerCase().includes(term)) ||
+                (tv.active_playlist && tv.active_playlist.name.toLowerCase().includes(term))
             );
             renderTable(filteredData);
         });
 
-        renderTable(tvs);
+        renderTable(tvsWithStatus);
 
         document.getElementById('addTvBtn')?.addEventListener('click', () => {
             openModal('Nova Televisão', [
@@ -646,8 +677,7 @@ async function loadPlaylists(container) {
     }
 }
 
-// ----- AGENDAMENTOS (NOVA SECÇÃO) -----
-// ----- AGENDAMENTOS (NOVA SECÇÃO) -----
+// ----- AGENDAMENTOS -----
 async function loadSchedule(container) {
     try {
         const [tvs, playlists, schedules] = await Promise.all([
@@ -730,9 +760,7 @@ async function loadSchedule(container) {
             </div>
         `;
 
-        // Modal para criar agendamento - COM SELECTS
         document.getElementById('addScheduleBtn')?.addEventListener('click', () => {
-            // Abrir modal com selects em vez de inputs
             const modal = document.getElementById('customModal');
             const titleEl = document.getElementById('modalTitle');
             const body = document.getElementById('modalBody');
@@ -820,7 +848,6 @@ async function loadSchedule(container) {
             closeBtn.addEventListener('click', handleCancel);
         });
 
-        // Apagar agendamento
         document.querySelectorAll('.delete-schedule').forEach(btn => {
             btn.addEventListener('click', () => {
                 const scheduleId = btn.dataset.id;
@@ -832,103 +859,6 @@ async function loadSchedule(container) {
             });
         });
 
-    } catch (err) {
-        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
-    }
-}
-
-// ----- Atribuições -----
-async function loadAssign(container) {
-    try {
-        const [tvs, playlists, assignments] = await Promise.all([
-            fetchAuth('/tvs').then(r => r.json()),
-            fetchAuth('/playlists').then(r => r.json()),
-            fetchAuth('/assign').then(r => r.json())
-        ]);
-        container.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Atribuir Playlist a TV (Fallback)</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Esta atribuição é usada quando não há agendamento ativo para a TV.</p>
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 mb-6">
-                <div class="flex flex-wrap items-end gap-4">
-                    <div>
-                        <label class="block text-sm text-gray-500 dark:text-gray-400 mb-1">TV</label>
-                        <select id="assignTV" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-gray-700 dark:text-gray-300">
-                            ${tvs.map(tv => `<option value="${tv.codigo}">${tv.name}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-500 dark:text-gray-400 mb-1">Playlist</label>
-                        <select id="assignPlaylist" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-gray-700 dark:text-gray-300">
-                            ${playlists.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                        </select>
-                    </div>
-                    <button id="assignBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl transition">Atribuir</button>
-                </div>
-            </div>
-            <h4 class="font-medium text-gray-700 dark:text-gray-300 mb-3">Atribuições Atuais</h4>
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50 dark:bg-gray-900/50">
-                            <tr>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TV</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Playlist</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Atribuída em</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${assignments.map(a => `
-                                <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${a.child_site_name}</td>
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${a.playlist_name}</td>
-                                    <td class="py-3 px-4 text-sm text-gray-500 dark:text-gray-400">${new Date(a.assigned_at).toLocaleString()}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-        document.getElementById('assignBtn')?.addEventListener('click', async () => {
-            const codigo = document.getElementById('assignTV').value;
-            const playlist_id = document.getElementById('assignPlaylist').value;
-            if (!codigo || !playlist_id) return showToast('Selecione ambos', 'warning');
-            
-            const token = localStorage.getItem('admin_token');
-            if (!token) {
-                showToast('Sessão expirada. Faça login novamente.', 'error');
-                window.location.href = '/login.html';
-                return;
-            }
-            
-            try {
-                const response = await fetch(`${API_BASE}/assign`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ child_site_codigo: codigo, playlist_id: parseInt(playlist_id) })
-                });
-                
-                if (response.status === 401) {
-                    localStorage.removeItem('admin_token');
-                    localStorage.removeItem('admin_user');
-                    window.location.href = '/login.html';
-                    return;
-                }
-                
-                const data = await response.json();
-                if (response.ok) {
-                    showToast('Atribuído com sucesso', 'success');
-                    loadAssign(container);
-                } else {
-                    showToast(data.error || 'Erro ao atribuir', 'error');
-                }
-            } catch (err) {
-                showToast('Erro de conexão', 'error');
-            }
-        });
     } catch (err) {
         container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
     }
