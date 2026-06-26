@@ -2,12 +2,12 @@
 // JAVASCRIPT COMPLETO - AUTOPLAY TOTAL
 // ============================================================
 
-const API_BASE = "http://127.0.0.1:5000";
+var API_BASE = "http://127.0.0.1:5000";
 
 // ============================================================
 // WEBSOCKET
 // ============================================================
-const socket = io('http://127.0.0.1:5000', {
+var socket = io('http://127.0.0.1:5000', {
     transports: ['websocket', 'polling']
 });
 
@@ -31,42 +31,42 @@ socket.on('playlist_updated', function(data) {
 // ============================================================
 // 1. VARIÁVEIS GLOBAIS
 // ============================================================
-let CODIGO_TV = null;
-let intervaloPolling = null;
-let reprodutorAtivo = false;
-let itemsPlaylist = [];
-let indiceAtual = 0;
-let temporizadorAtual = null;
-let elementoVideoAtual = null;
-let estaEmFullscreen = false;
-let fullscreenContainer = null;
-let temporizadorMouse = null;
-let playerAtivo = false;
-let iniciadoAutomaticamente = false;
+var CODIGO_TV = null;
+var intervaloPolling = null;
+var reprodutorAtivo = false;
+var itemsPlaylist = [];
+var indiceAtual = 0;
+var temporizadorAtual = null;
+var elementoVideoAtual = null;
+var estaEmFullscreen = false;
+var fullscreenContainer = null;
+var temporizadorMouse = null;
+var playerAtivo = false;
+var iniciadoAutomaticamente = false;
 
 // ============================================================
 // 2. ID FIXO DO DISPOSITIVO
 // ============================================================
 function obterIdDispositivo() {
-    let deviceId = localStorage.getItem("tv_device_id");
+    var deviceId = localStorage.getItem("tv_device_id");
     if (!deviceId) {
-        const userAgent = navigator.userAgent;
-        const screenRes = `${window.screen.width}x${window.screen.height}`;
-        const platform = navigator.platform;
-        const language = navigator.language;
-        const timestamp = Date.now();
-        const random = Math.random().toString(36).substring(2, 10);
-        let combinedString = `${userAgent}|${screenRes}|${platform}|${language}|${timestamp}|${random}`;
-        let hash = 0;
-        for (let i = 0; i < combinedString.length; i++) {
-            const char = combinedString.charCodeAt(i);
+        var userAgent = navigator.userAgent;
+        var screenRes = window.screen.width + 'x' + window.screen.height;
+        var platform = navigator.platform;
+        var language = navigator.language;
+        var timestamp = Date.now();
+        var random = Math.random().toString(36).substring(2, 10);
+        var combinedString = userAgent + '|' + screenRes + '|' + platform + '|' + language + '|' + timestamp + '|' + random;
+        var hash = 0;
+        for (var i = 0; i < combinedString.length; i++) {
+            var char = combinedString.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
-        const hashStr = Math.abs(hash).toString(36).toUpperCase();
-        const timestampStr = timestamp.toString(36).toUpperCase();
-        const randomStr = random.toUpperCase();
-        deviceId = `TV-${hashStr}-${timestampStr.substring(0, 4)}-${randomStr.substring(0, 4)}`;
+        var hashStr = Math.abs(hash).toString(36).toUpperCase();
+        var timestampStr = timestamp.toString(36).toUpperCase();
+        var randomStr = random.toUpperCase();
+        deviceId = 'TV-' + hashStr + '-' + timestampStr.substring(0, 4) + '-' + randomStr.substring(0, 4);
         localStorage.setItem("tv_device_id", deviceId);
         console.log("🆕 Novo ID do dispositivo criado (FIXO):", deviceId);
     } else {
@@ -79,15 +79,15 @@ function obterIdDispositivo() {
 // 3. CÓDIGO FIXO
 // ============================================================
 function gerarCodigoFixo(deviceId) {
-    const parts = deviceId.split('-');
-    let codigoBase = parts[1] || '';
+    var parts = deviceId.split('-');
+    var codigoBase = parts[1] || '';
     while (codigoBase.length < 6) codigoBase += '0';
-    let codigo = codigoBase.substring(0, 6);
-    let checksum = 0;
-    for (let i = 0; i < codigo.length; i++) {
+    var codigo = codigoBase.substring(0, 6);
+    var checksum = 0;
+    for (var i = 0; i < codigo.length; i++) {
         checksum += codigo.charCodeAt(i);
     }
-    const checkChar = String.fromCharCode(65 + (checksum % 26));
+    var checkChar = String.fromCharCode(65 + (checksum % 26));
     codigo = codigo.toUpperCase().replace(/[^A-Z0-9]/g, '');
     while (codigo.length < 6) codigo += 'X';
     return codigo.substring(0, 6) + checkChar;
@@ -97,21 +97,21 @@ function gerarCodigoFixo(deviceId) {
 // 4. FUNÇÕES DE API
 // ============================================================
 async function obterOuCriarCodigo() {
-    const deviceId = obterIdDispositivo();
-    let codigo = localStorage.getItem("tv_codigo");
+    var deviceId = obterIdDispositivo();
+    var codigo = localStorage.getItem("tv_codigo");
     if (!codigo) {
         codigo = gerarCodigoFixo(deviceId);
         localStorage.setItem("tv_codigo", codigo);
         console.log("📝 Código fixo guardado:", codigo);
     }
     try {
-        const response = await fetch(`${API_BASE}/api/child/${codigo}/playlist`);
+        var response = await fetch(API_BASE + '/api/child/' + codigo + '/playlist');
         if (response.status === 404) {
             console.log("⚠️ Código não encontrado, registando...");
-            await fetch(`${API_BASE}/api/tv/register`, {
+            await fetch(API_BASE + '/api/tv/register', {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ codigo, device_id: deviceId })
+                body: JSON.stringify({ codigo: codigo, device_id: deviceId })
             });
         }
     } catch (error) {
@@ -124,12 +124,12 @@ async function obterOuCriarCodigo() {
 async function registarTV() {
     try {
         socket.emit('register_tv', { codigo: CODIGO_TV });
-        const deviceId = obterIdDispositivo();
-        const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
-        const response = await fetch(`${API_BASE}/api/tv/register`, {
+        var deviceId = obterIdDispositivo();
+        var codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+        var response = await fetch(API_BASE + '/api/tv/register', {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ codigo, device_id: deviceId })
+            body: JSON.stringify({ codigo: codigo, device_id: deviceId })
         });
         return await response.json();
     } catch (error) {
@@ -140,14 +140,14 @@ async function registarTV() {
 
 async function buscarPlaylist() {
     try {
-        const codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
-        const response = await fetch(`${API_BASE}/api/child/${codigo}/playlist`);
+        var codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+        var response = await fetch(API_BASE + '/api/child/' + codigo + '/playlist');
         if (response.status === 404) {
             console.log("📭 Ainda sem playlist.");
             return null;
         }
-        if (!response.ok) throw new Error(`Erro ${response.status}`);
-        const data = await response.json();
+        if (!response.ok) throw new Error('Erro ' + response.status);
+        var data = await response.json();
         console.log("📋 Playlist recebida:", data);
         return data;
     } catch (error) {
@@ -162,18 +162,17 @@ async function buscarPlaylist() {
 function ativarPlayer() {
     console.log("🎬 Ativando player automaticamente...");
     playerAtivo = true;
-    
-    const appRoot = document.getElementById('appRoot');
+
+    var appRoot = document.getElementById('appRoot');
     if (appRoot) appRoot.style.display = 'none';
-    
-    const playerContainer = document.getElementById('playerContainer');
+
+    var playerContainer = document.getElementById('playerContainer');
     if (playerContainer) playerContainer.classList.add('active');
-    
-    // Iniciar reprodução imediatamente
-    setTimeout(() => {
+
+    setTimeout(function() {
         iniciarReproducao();
     }, 500);
-    
+
     if (intervaloPolling) clearInterval(intervaloPolling);
     intervaloPolling = setInterval(atualizarPlaylist, 30000);
 }
@@ -183,23 +182,23 @@ function voltarTelaInicial() {
     playerAtivo = false;
     iniciadoAutomaticamente = false;
     pararReproducao();
-    
+
     if (estaEmFullscreen) sairFullscreen();
-    
-    const playerContainer = document.getElementById('playerContainer');
+
+    var playerContainer = document.getElementById('playerContainer');
     if (playerContainer) {
         playerContainer.classList.remove('active');
         playerContainer.innerHTML = '';
     }
-    
-    const appRoot = document.getElementById('appRoot');
+
+    var appRoot = document.getElementById('appRoot');
     if (appRoot) appRoot.style.display = 'block';
-    
-    if (intervaloPolling) { 
-        clearInterval(intervaloPolling); 
-        intervaloPolling = null; 
+
+    if (intervaloPolling) {
+        clearInterval(intervaloPolling);
+        intervaloPolling = null;
     }
-    
+
     renderizarUI(null, "⏳ Aguardando playlist...");
 }
 
@@ -207,10 +206,10 @@ function voltarTelaInicial() {
 // 6. FULLSCREEN E CONTROLES
 // ============================================================
 function entrarFullscreen(elemento) {
-    const playerContainer = document.getElementById('playerContainer');
+    var playerContainer = document.getElementById('playerContainer');
     if (!playerContainer) return;
-    
-    let container = document.getElementById('fullscreenContainer');
+
+    var container = document.getElementById('fullscreenContainer');
     if (!container) {
         container = document.createElement('div');
         container.className = 'fullscreen-mode';
@@ -218,12 +217,10 @@ function entrarFullscreen(elemento) {
         playerContainer.appendChild(container);
     }
 
-    // Remove conteúdo antigo
-    const old = container.querySelector('video, img, .no-media-fullscreen, .play-overlay');
+    var old = container.querySelector('video, img, .no-media-fullscreen, .play-overlay');
     if (old) old.remove();
 
-    // Clona o elemento
-    const clone = elemento.cloneNode(true);
+    var clone = elemento.cloneNode(true);
     clone.style.width = '100vw';
     clone.style.height = '100vh';
     clone.style.objectFit = 'contain';
@@ -232,35 +229,30 @@ function entrarFullscreen(elemento) {
     clone.style.borderRadius = '0';
     container.appendChild(clone);
 
-    // Se for vídeo, FORÇA AUTOPLAY
     if (clone.tagName === 'VIDEO') {
-        const video = clone;
+        var video = clone;
         video.muted = false;
         video.controls = false;
         video.playsInline = true;
         video.setAttribute('playsinline', '');
         video.setAttribute('webkit-playsinline', '');
-        
-        // TENTAR AUTOPLAY IMEDIATAMENTE
         tryPlayVideo(video, container);
     }
 
-    // Botão de sair
-    let exitBtn = document.getElementById('exitFullscreenBtn');
+    var exitBtn = document.getElementById('exitFullscreenBtn');
     if (!exitBtn) {
         exitBtn = document.createElement('button');
         exitBtn.id = 'exitFullscreenBtn';
         exitBtn.className = 'exit-fullscreen-btn';
         exitBtn.innerHTML = '<i class="fas fa-times-circle"></i> Sair';
-        exitBtn.onclick = () => { 
-            sairFullscreen(); 
-            voltarTelaInicial(); 
+        exitBtn.onclick = function() {
+            sairFullscreen();
+            voltarTelaInicial();
         };
         container.appendChild(exitBtn);
     }
 
-    // Controles inferiores
-    let controls = document.getElementById('fullscreenControls');
+    var controls = document.getElementById('fullscreenControls');
     if (!controls) {
         controls = document.createElement('div');
         controls.className = 'fullscreen-controls';
@@ -272,14 +264,12 @@ function entrarFullscreen(elemento) {
         container.appendChild(controls);
     }
 
-    // Mostrar controles ao mexer o mouse
     container.addEventListener('mousemove', mostrarControles);
     container.addEventListener('mouseleave', ocultarControles);
 
-    // Ativar fullscreen da API
     if (!estaEmFullscreen) {
         if (container.requestFullscreen) {
-            container.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+            container.requestFullscreen({ navigationUI: 'hide' }).catch(function() {});
         }
         estaEmFullscreen = true;
         fullscreenContainer = container;
@@ -288,21 +278,21 @@ function entrarFullscreen(elemento) {
     mostrarControles();
 }
 
-// FUNÇÃO PARA TENTAR AUTOPLAY REPETIDAS VEZES
-function tryPlayVideo(video, container, tentativas = 0) {
+function tryPlayVideo(video, container, tentativas) {
+    tentativas = tentativas || 0;
     if (tentativas > 10) {
         console.log("⚠️ Falha no autoplay após 10 tentativas");
         mostrarOverlayPlay(video, container);
         return;
     }
-    
-    const playPromise = video.play();
+
+    var playPromise = video.play();
     if (playPromise !== undefined) {
-        playPromise.then(() => {
+        playPromise.then(function() {
             console.log("✅ Vídeo em reprodução automática!");
-        }).catch((error) => {
-            console.log(`⚠️ Tentativa ${tentativas + 1}: Autoplay bloqueado, tentando novamente...`);
-            setTimeout(() => {
+        }).catch(function(error) {
+            console.log("⚠️ Tentativa " + (tentativas + 1) + ": Autoplay bloqueado, tentando novamente...");
+            setTimeout(function() {
                 tryPlayVideo(video, container, tentativas + 1);
             }, 500);
         });
@@ -310,7 +300,7 @@ function tryPlayVideo(video, container, tentativas = 0) {
 }
 
 function mostrarOverlayPlay(video, container) {
-    const overlay = document.createElement('div');
+    var overlay = document.createElement('div');
     overlay.className = 'play-overlay';
     overlay.innerHTML = '<i class="fas fa-play-circle"></i> Clique para tocar';
     overlay.style.cssText = `
@@ -331,43 +321,43 @@ function mostrarOverlayPlay(video, container) {
         gap: 15px;
     `;
     overlay.querySelector('i').style.fontSize = '4rem';
-    
+
     overlay.addEventListener('click', function() {
         video.play();
         this.remove();
     });
-    
-    // Tenta novamente após 2 segundos
-    setTimeout(() => {
-        const playPromise = video.play();
+
+    setTimeout(function() {
+        var playPromise = video.play();
         if (playPromise !== undefined) {
-            playPromise.then(() => {
+            playPromise.then(function() {
                 overlay.remove();
                 console.log("✅ Vídeo iniciado após tentativa!");
-            }).catch(() => {});
+            }).catch(function() {});
         }
     }, 2000);
-    
+
     container.appendChild(overlay);
 }
 
 function sairFullscreen() {
     if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(function() {});
     }
-    const container = document.getElementById('fullscreenContainer');
+    var container = document.getElementById('fullscreenContainer');
     if (container) {
         container.removeEventListener('mousemove', mostrarControles);
         container.removeEventListener('mouseleave', ocultarControles);
     }
     estaEmFullscreen = false;
     fullscreenContainer = null;
-    if (temporizadorMouse) { clearTimeout(temporizadorMouse); temporizadorMouse = null; }
+    if (temporizadorMouse) { clearTimeout(temporizadorMouse);
+        temporizadorMouse = null; }
 }
 
 function mostrarControles() {
-    const exitBtn = document.getElementById('exitFullscreenBtn');
-    const controls = document.getElementById('fullscreenControls');
+    var exitBtn = document.getElementById('exitFullscreenBtn');
+    var controls = document.getElementById('fullscreenControls');
     if (exitBtn) exitBtn.classList.add('visible');
     if (controls) controls.classList.add('visible');
     if (temporizadorMouse) clearTimeout(temporizadorMouse);
@@ -375,35 +365,36 @@ function mostrarControles() {
 }
 
 function ocultarControles() {
-    const exitBtn = document.getElementById('exitFullscreenBtn');
-    const controls = document.getElementById('fullscreenControls');
+    var exitBtn = document.getElementById('exitFullscreenBtn');
+    var controls = document.getElementById('fullscreenControls');
     if (exitBtn) exitBtn.classList.remove('visible');
     if (controls) controls.classList.remove('visible');
-    if (temporizadorMouse) { clearTimeout(temporizadorMouse); temporizadorMouse = null; }
+    if (temporizadorMouse) { clearTimeout(temporizadorMouse);
+        temporizadorMouse = null; }
 }
 
-// Funções globais para os botões
 window.pauseResume = function() {
-    const container = document.getElementById('fullscreenContainer');
+    var container = document.getElementById('fullscreenContainer');
     if (!container) return;
-    const video = container.querySelector('video');
+    var video = container.querySelector('video');
     if (video) {
-        if (video.paused) { 
-            video.play(); 
-        } else { 
-            video.pause(); 
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
         }
     }
     mostrarControles();
 };
 
 window.proximoItem = function() {
-    if (temporizadorAtual) { clearTimeout(temporizadorAtual); temporizadorAtual = null; }
+    if (temporizadorAtual) { clearTimeout(temporizadorAtual);
+        temporizadorAtual = null; }
     if (reprodutorAtivo && itemsPlaylist.length > 0) {
         if (indiceAtual >= itemsPlaylist.length) indiceAtual = 0;
-        const item = itemsPlaylist[indiceAtual];
+        var item = itemsPlaylist[indiceAtual];
         indiceAtual++;
-        reproduzirItem(item, () => {
+        reproduzirItem(item, function() {
             if (reprodutorAtivo) {
                 avancarLoop();
             }
@@ -416,28 +407,28 @@ window.proximoItem = function() {
 // 7. REPRODUÇÃO DE ITENS
 // ============================================================
 function pararReproducao() {
-    if (temporizadorAtual) { 
-        clearTimeout(temporizadorAtual); 
-        temporizadorAtual = null; 
+    if (temporizadorAtual) {
+        clearTimeout(temporizadorAtual);
+        temporizadorAtual = null;
     }
-    if (elementoVideoAtual) { 
-        elementoVideoAtual.pause(); 
-        elementoVideoAtual = null; 
+    if (elementoVideoAtual) {
+        elementoVideoAtual.pause();
+        elementoVideoAtual = null;
     }
     reprodutorAtivo = false;
 }
 
 function reproduzirItem(item, onTerminar) {
     console.log("🎬 Reproduzindo item:", item);
-    
-    const playerContainer = document.getElementById('playerContainer');
+
+    var playerContainer = document.getElementById('playerContainer');
     if (!playerContainer) {
         console.error("❌ Player container não encontrado");
         setTimeout(onTerminar, 1000);
         return;
     }
 
-    let container = document.getElementById('fullscreenContainer');
+    var container = document.getElementById('fullscreenContainer');
     if (!container) {
         container = document.createElement('div');
         container.className = 'fullscreen-mode';
@@ -445,19 +436,18 @@ function reproduzirItem(item, onTerminar) {
         playerContainer.appendChild(container);
     }
 
-    const url = item.url;
-    const mimeType = item.mime_type || '';
-    const isVideo = mimeType.startsWith('video/') || url.match(/\.(mp4|webm|mov|avi|mkv)$/i);
-    const isImage = mimeType.startsWith('image/') || url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i);
+    var url = item.url;
+    var mimeType = item.mime_type || '';
+    var isVideo = mimeType.startsWith('video/') || url.match(/\.(mp4|webm|mov|avi|mkv)$/i);
+    var isImage = mimeType.startsWith('image/') || url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i);
 
-    // Remove conteúdo antigo
-    const old = container.querySelector('video, img, .no-media-fullscreen, .play-overlay');
+    var old = container.querySelector('video, img, .no-media-fullscreen, .play-overlay');
     if (old) old.remove();
 
     if (isVideo) {
         console.log("🎥 Reproduzindo vídeo:", url);
-        const video = document.createElement('video');
-        const videoUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+        var video = document.createElement('video');
+        var videoUrl = url.startsWith('http') ? url : API_BASE + url;
         video.src = videoUrl;
         video.autoplay = true;
         video.controls = false;
@@ -480,13 +470,13 @@ function reproduzirItem(item, onTerminar) {
             tryPlayVideo(video, container);
         };
 
-        video.onended = () => {
+        video.onended = function() {
             console.log("⏹️ Vídeo terminou");
             elementoVideoAtual = null;
             onTerminar();
         };
 
-        video.onerror = (e) => {
+        video.onerror = function(e) {
             console.error("❌ Erro no vídeo:", e);
             console.error("URL do vídeo:", videoUrl);
             elementoVideoAtual = null;
@@ -502,38 +492,38 @@ function reproduzirItem(item, onTerminar) {
 
     } else if (isImage) {
         console.log("🖼️ Reproduzindo imagem:", url);
-        const img = document.createElement('img');
-        const imgUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+        var img = document.createElement('img');
+        var imgUrl = url.startsWith('http') ? url : API_BASE + url;
         img.src = imgUrl;
         img.alt = "Imagem";
         img.style.width = '100vw';
         img.style.height = '100vh';
         img.style.objectFit = 'contain';
         img.style.background = '#000';
-        
-        img.onload = () => {
+
+        img.onload = function() {
             console.log("✅ Imagem carregada");
             entrarFullscreen(img);
         };
-        
-        img.onerror = () => {
+
+        img.onerror = function() {
             console.error("❌ Erro ao carregar imagem:", imgUrl);
             onTerminar();
         };
-        
+
         container.appendChild(img);
 
-        const duracao = (item.duration_seconds || 10) * 1000;
-        temporizadorAtual = setTimeout(() => {
+        var duracao = (item.duration_seconds || 10) * 1000;
+        temporizadorAtual = setTimeout(function() {
             temporizadorAtual = null;
             onTerminar();
         }, duracao);
 
     } else {
         console.log("📄 Item sem mídia reconhecida:", item);
-        const msgDiv = document.createElement('div');
+        var msgDiv = document.createElement('div');
         msgDiv.className = 'no-media-fullscreen';
-        msgDiv.textContent = `📺 ${item.name || 'Conteúdo indisponível'}`;
+        msgDiv.textContent = '📺 ' + (item.name || 'Conteúdo indisponível');
         msgDiv.style.cssText = `
             color: #fff;
             font-size: 1.8rem;
@@ -545,33 +535,33 @@ function reproduzirItem(item, onTerminar) {
             max-width: 80%;
         `;
         entrarFullscreen(msgDiv);
-        setTimeout(() => { onTerminar(); }, 3000);
+        setTimeout(function() { onTerminar(); }, 3000);
     }
 }
 
 function avancarLoop() {
     if (!reprodutorAtivo) return;
     if (indiceAtual >= itemsPlaylist.length) indiceAtual = 0;
-    const item = itemsPlaylist[indiceAtual];
+    var item = itemsPlaylist[indiceAtual];
     indiceAtual++;
-    reproduzirItem(item, () => { avancarLoop(); });
+    reproduzirItem(item, function() { avancarLoop(); });
 }
 
 function iniciarReproducao() {
     pararReproducao();
-    
+
     if (!itemsPlaylist || itemsPlaylist.length === 0) {
         console.log("📭 Nenhum item para reproduzir");
         return;
     }
-    
+
     console.log("▶️ Iniciando loop de reprodução com", itemsPlaylist.length, "itens");
     indiceAtual = 0;
     reprodutorAtivo = true;
-    
-    const playerContainer = document.getElementById('playerContainer');
+
+    var playerContainer = document.getElementById('playerContainer');
     if (playerContainer) {
-        let container = document.getElementById('fullscreenContainer');
+        var container = document.getElementById('fullscreenContainer');
         if (!container) {
             container = document.createElement('div');
             container.className = 'fullscreen-mode';
@@ -579,20 +569,20 @@ function iniciarReproducao() {
             playerContainer.appendChild(container);
         }
     }
-    
+
     avancarLoop();
 }
 
 // ============================================================
-// 8. UI - COM AUTOPLAY TOTAL
+// 8. UI
 // ============================================================
 function renderizarUI(playlist, statusMensagem) {
-    const root = document.getElementById('appRoot');
+    var root = document.getElementById('appRoot');
     if (!root) return;
-    
-    const temPlaylist = playlist && playlist.items && playlist.items.length > 0;
-    const deviceId = obterIdDispositivo();
-    const codigoFixo = localStorage.getItem("tv_codigo") || CODIGO_TV;
+
+    var temPlaylist = playlist && playlist.items && playlist.items.length > 0;
+    var deviceId = obterIdDispositivo();
+    var codigoFixo = localStorage.getItem("tv_codigo") || CODIGO_TV;
 
     root.innerHTML = `
         <div class="card tv-mode">
@@ -605,4 +595,86 @@ function renderizarUI(playlist, statusMensagem) {
             <div class="device-id">ID: ${deviceId.substring(0, 20)}...</div>
             <div class="tv-status" id="tvStatusMsg">
                 ${statusMensagem || (temPlaylist ? '✅ Playlist disponível! Iniciando automaticamente...' : '⏳ Aguardando playlist...')}
-            </
+            </div>
+            ${temPlaylist ? `
+                <div class="autoplay-status">
+                    <i class="fas fa-spinner fa-spin"></i> A iniciar automaticamente...
+                </div>
+            ` : `
+                <p style="color: #64748b; margin-top: 20px; font-size: 0.9rem;">
+                    <i class="fas fa-circle-notch fa-spin"></i> Aguardando atribuição de playlist...
+                </p>
+            `}
+            <div class="footer-note">
+                <i class="fas fa-lock"></i> Código permanente para este dispositivo
+            </div>
+        </div>
+    `;
+
+    if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente) {
+        iniciadoAutomaticamente = true;
+        console.log("🚀 Iniciando reprodução automática em 2 segundos...");
+        setTimeout(function() {
+            ativarPlayer();
+        }, 2000);
+    }
+}
+
+// ============================================================
+// 9. POLLING E INICIALIZAÇÃO
+// ============================================================
+async function atualizarPlaylist() {
+    console.log("🔄 Atualizando playlist...");
+
+    var playlist = await buscarPlaylist();
+
+    if (playlist && playlist.items && playlist.items.length > 0) {
+        itemsPlaylist = playlist.items;
+        console.log("📋 Playlist carregada:", itemsPlaylist.length, "itens");
+
+        if (!playerAtivo) {
+            renderizarUI(playlist, '✅ Playlist disponível! Iniciando automaticamente...');
+        } else {
+            iniciarReproducao();
+        }
+    } else {
+        iniciadoAutomaticamente = false;
+        if (!playerAtivo) {
+            renderizarUI(null, '⏳ Aguardando playlist...');
+        } else {
+            voltarTelaInicial();
+        }
+    }
+}
+
+// ============================================================
+// 10. INICIALIZAÇÃO
+// ============================================================
+(async function iniciar() {
+    console.log("🚀 Inicializando TV Manager com AUTOPLAY TOTAL...");
+
+    CODIGO_TV = await obterOuCriarCodigo();
+    console.log("🔑 CÓDIGO FIXO:", CODIGO_TV);
+
+    await registarTV();
+    console.log("📡 TV registada no servidor");
+
+    var playerContainer = document.createElement('div');
+    playerContainer.id = 'playerContainer';
+    playerContainer.className = 'player-container';
+    document.body.appendChild(playerContainer);
+
+    await atualizarPlaylist();
+
+    document.addEventListener('fullscreenchange', function() {
+        if (!document.fullscreenElement && estaEmFullscreen) {
+            voltarTelaInicial();
+        }
+    });
+
+    if (intervaloPolling) clearInterval(intervaloPolling);
+    intervaloPolling = setInterval(atualizarPlaylist, 30000);
+
+    console.log("✅ TV Manager inicializado com sucesso!");
+    console.log("🎯 AUTOPLAY TOTAL - Iniciará automaticamente quando a playlist estiver disponível");
+})();
