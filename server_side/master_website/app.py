@@ -72,6 +72,14 @@ JWT_EXPIRATION_HOURS = 24
 from db import init_db
 init_db()
 
+# Guarda em memória (não precisa de ir para a base de dados) o item que cada
+# TV está a reproduzir neste preciso momento. É atualizado sempre que a TV
+# começa a reproduzir um novo item (ver evento socket 'now_playing') e é lido
+# pelo painel administrativo em /api/tvs/status para mostrar "a reproduzir
+# agora". Se o servidor reiniciar, este dicionário é reconstruído assim que
+# cada TV enviar o próximo evento.
+now_playing_by_tv = {}
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -214,19 +222,23 @@ def add_item_to_playlist(playlist_id):
     user_id = request.current_user["user_id"]
     item = request.get_json()
     media_id = item.get("media_id")
-    duration = item.get("duration", 10)
-    
+    # Horário do dia em que este item pode ser mostrado na TV (ex: "08:00").
+    # Se não forem definidos, o item é mostrado a qualquer hora.
+    start_time = item.get("start_time") or None
+    end_time = item.get("end_time") or None
+
     if not media_id:
         return jsonify({"error": "media_id é obrigatório"}), 400
-    
+
     playlist = get_playlist(playlist_id)
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
-    
+
     items = get_playlist_items(playlist_id, user_id)
     next_order = len(items) + 1
-    add_playlist_item(playlist_id, media_id, duration, next_order)
-    
+    add_playlist_item(playlist_id, media_id, duration_seconds=10, display_order=next_order,
+                       start_time=start_time, end_time=end_time)
+
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 201
 
@@ -235,14 +247,13 @@ def add_item_to_playlist(playlist_id):
 def update_playlist_item(playlist_id, item_id):
     user_id = request.current_user["user_id"]
     data = request.get_json()
-    duration = data.get("duration")
     start_time = data.get("start_time")
     end_time = data.get("end_time")
-    
+
     playlist = get_playlist(playlist_id)
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
-    
+
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM playlist_items WHERE id = ? AND playlist_id = ?", (item_id, playlist_id))
@@ -250,26 +261,15 @@ def update_playlist_item(playlist_id, item_id):
     if not item:
         conn.close()
         return jsonify({"error": "Item não encontrado"}), 404
-    
-    updates = []
-    params = []
-    if duration is not None:
-        updates.append("duration_seconds = ?")
-        params.append(duration)
-    if start_time is not None:
-        updates.append("start_time = ?")
-        params.append(start_time)
-    if end_time is not None:
-        updates.append("end_time = ?")
-        params.append(end_time)
-    
-    if updates:
-        params.append(item_id)
-        cursor.execute(f"UPDATE playlist_items SET {', '.join(updates)} WHERE id = ?", params)
-        conn.commit()
-    
+
+    # Uma string vazia limpa o horário (o item passa a mostrar-se sempre)
+    cursor.execute(
+        "UPDATE playlist_items SET start_time = ?, end_time = ? WHERE id = ?",
+        (start_time or None, end_time or None, item_id)
+    )
+    conn.commit()
     conn.close()
-    
+
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
@@ -340,6 +340,19 @@ def assign_playlist():
 
     return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
 
+def _item_dentro_do_horario(item, current_time):
+    """Verifica se um item de playlist pode ser mostrado agora, com base em
+    start_time/end_time (formato 'HH:MM'). Sem horário definido = sempre visível."""
+    inicio = item.get("start_time")
+    fim = item.get("end_time")
+    if not inicio or not fim:
+        return True
+    if inicio <= fim:
+        return inicio <= current_time <= fim
+    # Horário que atravessa a meia-noite, ex: 22:00 às 06:00
+    return current_time >= inicio or current_time <= fim
+
+
 @app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
 def get_child_playlist(child_site_codigo):
     child_site = get_child_site_by_codigo(child_site_codigo)
@@ -351,14 +364,19 @@ def get_child_playlist(child_site_codigo):
     current_time = now.strftime("%H:%M")
     
     scheduled_playlist = get_active_playlist_for_tv(child_site["id"], day_of_week, current_time)
-    if scheduled_playlist:
-        return jsonify(scheduled_playlist)
-    
-    playlist = get_current_playlist_for_tv(child_site["id"], child_site["user_id"])
+    playlist = scheduled_playlist or get_current_playlist_for_tv(child_site["id"], child_site["user_id"])
+
     if not playlist:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
-    
-    return jsonify(playlist)
+
+    # Só envia à TV os itens cujo horário permitido inclui a hora atual.
+    playlist_resposta = dict(playlist)
+    playlist_resposta["items"] = [
+        item for item in playlist.get("items", [])
+        if _item_dentro_do_horario(item, current_time)
+    ]
+
+    return jsonify(playlist_resposta)
 
 ################################################################################
 
@@ -570,6 +588,20 @@ def handle_register_tv(data):
         print(f"TV {codigo} registada na sala {codigo}")
         emit('registered', {'status': 'ok', 'codigo': codigo}, room=request.sid)
 
+@socketio.on('now_playing')
+def handle_now_playing(data):
+    """A TV emite este evento sempre que começa a reproduzir um novo item.
+    Guardamos em memória para o painel administrativo poder mostrar
+    'o que está a ser mostrado' em cada televisão."""
+    codigo = data.get('codigo')
+    if not codigo:
+        return
+    now_playing_by_tv[codigo] = {
+        'item_name': data.get('item_name'),
+        'tipo': data.get('tipo'),
+        'updated_at': datetime.now().isoformat()
+    }
+
 ################################################################################################################
 
 @app.route("/api/playlists/<int:playlist_id>/items/reorder", methods=["POST"])
@@ -720,7 +752,8 @@ def get_tvs_status():
             "name": tv["name"],
             "codigo": tv["codigo"],
             "ip": tv["ip"],
-            "active_playlist": playlist_info
+            "active_playlist": playlist_info,
+            "now_playing": now_playing_by_tv.get(tv["codigo"])
         })
     return jsonify(result)
 

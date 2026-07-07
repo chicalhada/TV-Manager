@@ -65,11 +65,21 @@ def init_db():
             playlist_id INTEGER NOT NULL,
             media_id INTEGER NOT NULL,
             duration_seconds INTEGER DEFAULT 10,
+            start_time TEXT,
+            end_time TEXT,
             display_order INTEGER NOT NULL,
             FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
             FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
         )
     ''')
+    # MIGRAÇÃO: se a base de dados já existia antes desta alteração, a tabela
+    # playlist_items pode não ter as colunas start_time/end_time. Tenta
+    # adicioná-las e ignora o erro se já existirem.
+    for coluna in ("start_time", "end_time"):
+        try:
+            cursor.execute(f"ALTER TABLE playlist_items ADD COLUMN {coluna} TEXT")
+        except sqlite3.OperationalError:
+            pass  # a coluna já existe
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS assignments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,16 +263,16 @@ def delete_playlist(playlist_id):
     conn.commit()
     conn.close()
 
-def add_playlist_item(playlist_id, media_id, duration_seconds, display_order=None):
+def add_playlist_item(playlist_id, media_id, duration_seconds=10, display_order=None, start_time=None, end_time=None):
     conn = get_connection()
     cursor = conn.cursor()
     if display_order is None:
         cursor.execute("SELECT COALESCE(MAX(display_order), 0) + 1 FROM playlist_items WHERE playlist_id = ?", (playlist_id,))
         display_order = cursor.fetchone()[0]
     cursor.execute('''
-        INSERT INTO playlist_items (playlist_id, media_id, duration_seconds, display_order)
-        VALUES (?, ?, ?, ?)
-    ''', (playlist_id, media_id, duration_seconds, display_order))
+        INSERT INTO playlist_items (playlist_id, media_id, duration_seconds, start_time, end_time, display_order)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (playlist_id, media_id, duration_seconds, start_time, end_time, display_order))
     conn.commit()
     item_id = cursor.lastrowid
     conn.close()

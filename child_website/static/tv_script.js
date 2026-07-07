@@ -161,6 +161,15 @@ function voltarTelaInicial() {
 
   if (estaEmFullscreen) sairFullscreen();
 
+  // Avisa o painel administrativo que esta TV já não está a mostrar nada.
+  if (CODIGO_TV) {
+    socket.emit("now_playing", {
+      codigo: CODIGO_TV,
+      item_name: null,
+      tipo: null,
+    });
+  }
+
   const playerContainer = document.getElementById("playerContainer");
   if (playerContainer) {
     playerContainer.classList.remove("active");
@@ -517,6 +526,14 @@ function reproduzirItem(item, onTerminar) {
   const isImage =
     mimeType.startsWith("image/") ||
     /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url);
+
+  // Avisa o servidor (e assim o painel administrativo) do que esta TV está
+  // a mostrar agora, para aparecer em "A reproduzir agora" no painel.
+  socket.emit("now_playing", {
+    codigo: CODIGO_TV,
+    item_name: item.name || item.filename || "Sem nome",
+    tipo: isVideo ? "video" : isImage ? "imagem" : "outro",
+  });
 
   const oldContent = container.querySelector(
     "video, img, .no-media-fullscreen, .play-overlay",
