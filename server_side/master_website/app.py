@@ -51,19 +51,26 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-upload_folder = 'uploads/'
+# CORRIGIDO: caminhos baseados na localização real deste ficheiro (app.py),
+# em vez de caminhos relativos que dependiam da pasta de onde o comando
+# "python app.py" era executado. Isto evita que os ficheiros sejam GUARDADOS
+# numa pasta e SERVIDOS a partir de outra (o que causava 404 em imagens e
+# vídeos, tanto no preview do admin como na TV).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# child_website/ está na raiz do projeto, dois níveis acima deste ficheiro
+# (server_side/master_website/app.py -> server_side/ -> raiz do projeto).
+CHILD_WEBSITE_STATIC = os.path.join(BASE_DIR, '..', '..', 'child_website', 'static')
+
+upload_folder = os.path.join(BASE_DIR, 'uploads')
 os.makedirs(upload_folder, exist_ok=True)
 
-JWT_SECRET = "tvmanager_secret_key_2026_secure_32bytes" 
+JWT_SECRET = "tvmanager_secret_key_2026_secure_32bytes"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
-############################################################################################################
-
 from db import init_db
 init_db()
-
-############################################################################################################
 
 def login_required(f):
     @wraps(f)
@@ -71,7 +78,6 @@ def login_required(f):
         token = request.headers.get("Authorization", "").replace("Bearer ", "")
         if not token:
             return jsonify({"error": "Token não fornecido"}), 401
-        
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             request.current_user = payload
@@ -79,7 +85,6 @@ def login_required(f):
             return jsonify({"error": "Token expirado"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Token inválido"}), 401
-        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -115,15 +120,20 @@ def serve_js():
 
 @app.route('/tv')
 def tv():
-    return send_from_directory('static', 'tv.html')
+    return send_from_directory(CHILD_WEBSITE_STATIC, 'tv.html')
 
 @app.route('/tv_design.css')
 def serve_tv_css():
-    return send_from_directory('static', 'tv_design.css')
+    return send_from_directory(CHILD_WEBSITE_STATIC, 'tv_design.css')
 
 @app.route('/tv_script.js')
 def serve_tv_js():
-    return send_from_directory('static', 'tv_script.js')
+    return send_from_directory(CHILD_WEBSITE_STATIC, 'tv_script.js')
+
+# Rota para servir ficheiros enviados (uploads) - CORRIGIDO
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(upload_folder, filename)
 
 ########################################################################################
 
@@ -133,7 +143,6 @@ def health():
 
 ################################################################################
 
-# Substituir a rota atual por esta:
 @app.route("/api/tvs", methods=["GET"])
 @login_required
 def get_tvs():
@@ -150,31 +159,21 @@ def get_tvs():
 def add_tv():
     data = request.get_json()
     user_id = request.current_user["user_id"]
+    codigo = data.get("codigo")
+    if not codigo:
+        return jsonify({"error": "Código da TV é obrigatório"}), 400
+    existing = get_child_site_by_codigo(codigo)
+    if existing:
+        return jsonify({"error": "Este código já está registado"}), 409
     child_id = add_child_site(
         data["name"],
         user_id,
         data.get("ip"),
-        data.get("codigo")
+        codigo
     )
     tvs = list_child_sites(user_id)
     nova_tv = next((tv for tv in tvs if tv["id"] == child_id), None)
     return jsonify(nova_tv), 201
-
-@app.route("/api/tv/register", methods=["POST"])
-def register_tv():
-    data = request.get_json() or {}
-    codigo = data.get("codigo")
-    
-    if not codigo:
-        codigo = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    
-    tv = get_child_site_by_codigo(codigo)
-    if not tv:
-        # Registrar com user_id = 1 (utilizador padrão) - na prática deveria ser o admin atual
-        child_id = add_child_site(f"TV {codigo}", 1, None, codigo)
-        tv = get_child_site_by_codigo(codigo)
-    
-    return jsonify({"success": True, "codigo": tv["codigo"], "child_id": tv["id"]}), 200
 
 ################################################################################
 
@@ -313,10 +312,6 @@ def get_media_list():
     media = list_media(user_id)
     return jsonify(media)
 
-@app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    return send_from_directory('uploads', filename)
-
 ################################################################################
 
 @app.route("/api/assign", methods=["POST"])
@@ -333,12 +328,14 @@ def assign_playlist():
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
+    if child_site['user_id'] != user_id:
+        return jsonify({"error": "Não autorizado"}), 403
     
     assign_playlist_to_tv(child_site["id"], playlist_id, user_id)
 
     socketio.emit('playlist_updated', {
-    'child_site_codigo': child_site_codigo,
-    'playlist_id': playlist_id
+        'child_site_codigo': child_site_codigo,
+        'playlist_id': playlist_id
     }, room=child_site_codigo)
 
     return jsonify({"success": True, "child_site_codigo": child_site["codigo"], "playlist_id": playlist_id}), 200
@@ -349,7 +346,6 @@ def get_child_playlist(child_site_codigo):
     if not child_site:
         return jsonify({"error": "TV não encontrada"}), 404
     
-    # Verificar se há agendamento ativo
     now = datetime.now()
     day_of_week = now.strftime("%a").upper()
     current_time = now.strftime("%H:%M")
@@ -372,7 +368,6 @@ def delete_tv(child_id):
     user_id = request.current_user["user_id"]
     conn = get_connection()
     cursor = conn.cursor()
-    # Verificar se a TV pertence ao utilizador
     cursor.execute("DELETE FROM child_sites WHERE id = ? AND user_id = ?", (child_id, user_id))
     conn.commit()
     conn.close()
@@ -419,7 +414,6 @@ def delete_playlist_item(playlist_id, item_id):
     conn = get_connection()
     cursor = conn.cursor()
     
-    # Verificar se o item pertence a uma playlist do utilizador
     cursor.execute("""
         SELECT pi.* FROM playlist_items pi
         JOIN playlists p ON pi.playlist_id = p.id
@@ -443,10 +437,6 @@ def register():
     data = request.get_json()
     username = data.get("username")
     password = data.get("password")
-    email = data.get("email")
-
-    if email == "":
-        email = None
 
     if not username or not password:
         return jsonify({"error": "Username e password são obrigatórios"}), 400
@@ -456,7 +446,7 @@ def register():
         return jsonify({"error": "Username já existe"}), 409
 
     password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    user_id = add_user(username, password_hash, email)
+    user_id = add_user(username, password_hash, None)
     return jsonify({"success": True, "user_id": user_id, "username": username}), 201
 
 @app.route("/api/auth/login", methods=["POST"])

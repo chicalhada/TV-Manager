@@ -1,8 +1,14 @@
 import sqlite3
+import os
 from datetime import datetime
 import bcrypt
 
-DB_PATH = 'tvmanager.db'
+# CORRIGIDO: antes 'tvmanager.db' era resolvido em relação à pasta de onde
+# corrias o "python app.py" (o cwd), o que fazia criar um ficheiro .db
+# diferente consoante o sítio a partir de onde iniciavas o servidor.
+# Agora fica sempre ao lado deste ficheiro, independentemente de onde
+# corres o comando.
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tvmanager.db')
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)

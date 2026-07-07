@@ -42,8 +42,8 @@ function openModal(title, fields, onConfirm) {
     titleEl.innerText = title;
     body.innerHTML = fields.map(f => `
         <div class="mb-4">
-            <label for="${f.id}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">${f.label}</label>
-            <input type="${f.type}" id="${f.id}" value="${f.value || ''}" placeholder="${f.placeholder || ''}" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <label for="${f.id}" class="block text-sm font-medium text-gray-300 mb-1">${f.label}</label>
+            <input type="${f.type}" id="${f.id}" value="${f.value || ''}" placeholder="${f.placeholder || ''}" class="w-full px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
     `).join('');
 
@@ -79,7 +79,7 @@ function confirmModal(message, onConfirm) {
     const closeBtn = document.getElementById('closeModalBtn');
 
     titleEl.innerText = 'Confirmar';
-    body.innerHTML = `<p class="text-gray-700 dark:text-gray-300">${message}</p>`;
+    body.innerHTML = `<p class="text-gray-300">${message}</p>`;
 
     modal.classList.remove('hidden');
 
@@ -102,7 +102,7 @@ function confirmModal(message, onConfirm) {
     closeBtn.addEventListener('click', handleCancel);
 }
 
-// ----- Lightbox para imagens e vídeos (CORRIGIDO) -----
+// ----- Lightbox para imagens e vídeos -----
 function showLightbox(url) {
     const lightbox = document.getElementById('lightbox');
     const img = document.getElementById('lightboxImage');
@@ -112,10 +112,10 @@ function showLightbox(url) {
     videoContainer.style.display = 'none';
     videoContainer.innerHTML = '';
 
-    // Garantir URL absoluta se for relativa
-    const fullUrl = url.startsWith('http') ? url : `http://localhost:5000${url}`;
+    const fullUrl = getFullUrl(url);
 
-    const isVideo = /\.(mp4|webm|ogg|mov|avi)$/i.test(fullUrl);
+    const isVideo = /\.(mp4|webm|ogg|mov|avi)$/i.test(fullUrl) || 
+                    (fullUrl.includes('video') && !fullUrl.endsWith('.jpg') && !fullUrl.endsWith('.png'));
     
     if (isVideo) {
         videoContainer.style.display = 'block';
@@ -127,12 +127,7 @@ function showLightbox(url) {
         video.style.maxWidth = '90vw';
         video.style.maxHeight = '80vh';
         videoContainer.appendChild(video);
-        
-        // Tentar reproduzir automaticamente
-        video.play().catch(() => {
-            // Se falhar, o utilizador pode clicar no vídeo para reproduzir
-            video.addEventListener('click', () => video.play());
-        });
+        video.play().catch(() => {});
     } else {
         img.style.display = 'block';
         img.src = fullUrl;
@@ -155,6 +150,17 @@ document.getElementById('lightbox')?.addEventListener('click', (e) => {
         if (video) video.pause();
     }
 });
+
+// ----- Função auxiliar para obter URL absoluta (dinâmica) -----
+function getFullUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+    }
+    // Usa a origem atual (ex: http://localhost:5000 ou IP da máquina)
+    const origin = window.location.origin;
+    return origin + (url.startsWith('/') ? url : '/' + url);
+}
 
 // ----- Autenticação -----
 function checkAuth() {
@@ -201,15 +207,17 @@ async function fetchAuth(url, options = {}) {
     return response;
 }
 
-// ----- Navegação -----
+// ----- Navegação (corrigida) -----
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
         e.preventDefault();
         const view = item.dataset.view;
         if (!view) return;
         currentView = view;
-        document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('bg-indigo-50', 'dark:bg-indigo-900/30', 'text-indigo-600', 'dark:text-indigo-400'));
-        item.classList.add('bg-indigo-50', 'dark:bg-indigo-900/30', 'text-indigo-600', 'dark:text-indigo-400');
+        document.querySelectorAll('.nav-item').forEach(nav => {
+            nav.classList.remove('bg-gray-800', 'text-indigo-400', 'sidebar-active');
+        });
+        item.classList.add('bg-gray-800', 'text-indigo-400', 'sidebar-active');
         const titles = {
             dashboard: 'Dashboard',
             tvs: 'Televisões',
@@ -224,14 +232,14 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 async function loadView(view) {
     const container = document.getElementById('viewContainer');
-    container.innerHTML = '<div class="text-center py-12"><div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div><p class="mt-3 text-gray-500 dark:text-gray-400">Carregando...</p></div>';
+    container.innerHTML = '<div class="text-center py-12"><div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div><p class="mt-3 text-gray-500">Carregando...</p></div>';
     switch (view) {
         case 'dashboard': await loadDashboard(container); break;
         case 'tvs': await loadTVs(container); break;
         case 'media': await loadMedia(container); break;
         case 'playlists': await loadPlaylists(container); break;
         case 'schedule': await loadSchedule(container); break;
-        default: container.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Selecione uma opção</p>';
+        default: container.innerHTML = '<p class="text-gray-500">Selecione uma opção</p>';
     }
 }
 
@@ -249,13 +257,13 @@ async function loadDashboard(container) {
             { label: 'Ficheiros', value: media.length, icon: 'fa-image', color: 'blue' }
         ];
         const cards = stats.map(s => `
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 transition hover:shadow-md">
+            <div class="bg-gray-900 rounded-2xl shadow-sm border border-gray-800 p-6 transition hover:shadow-md">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">${s.label}</p>
-                        <p class="text-3xl font-bold text-gray-800 dark:text-white mt-1">${s.value}</p>
+                        <p class="text-sm text-gray-400">${s.label}</p>
+                        <p class="text-3xl font-bold text-white mt-1">${s.value}</p>
                     </div>
-                    <div class="w-12 h-12 rounded-xl bg-${s.color}-50 dark:bg-${s.color}-900/20 flex items-center justify-center text-${s.color}-500 dark:text-${s.color}-400">
+                    <div class="w-12 h-12 rounded-xl bg-${s.color}-900/30 flex items-center justify-center text-${s.color}-400">
                         <i class="fas ${s.icon} text-xl"></i>
                     </div>
                 </div>
@@ -263,17 +271,17 @@ async function loadDashboard(container) {
         `).join('');
         container.innerHTML = `
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">${cards}</div>
-            <div class="mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-4">Resumo</h3>
+            <div class="mt-8 bg-gray-900 rounded-2xl shadow-sm border border-gray-800 p-6">
+                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Resumo</h3>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><span class="text-gray-500 dark:text-gray-400">Total de TVs:</span> <span class="font-medium dark:text-white">${tvs.length}</span></div>
-                    <div><span class="text-gray-500 dark:text-gray-400">Playlists:</span> <span class="font-medium dark:text-white">${playlists.length}</span></div>
-                    <div><span class="text-gray-500 dark:text-gray-400">Ficheiros:</span> <span class="font-medium dark:text-white">${media.length}</span></div>
+                    <div><span class="text-gray-500">Total de TVs:</span> <span class="font-medium text-white">${tvs.length}</span></div>
+                    <div><span class="text-gray-500">Playlists:</span> <span class="font-medium text-white">${playlists.length}</span></div>
+                    <div><span class="text-gray-500">Ficheiros:</span> <span class="font-medium text-white">${media.length}</span></div>
                 </div>
             </div>
         `;
     } catch (err) {
-        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-400">Erro: ${err.message}</p>`;
     }
 }
 
@@ -297,25 +305,25 @@ async function loadTVs(container) {
 
         const searchInput = document.createElement('input');
         searchInput.placeholder = '🔍 Pesquisar televisão...';
-        searchInput.className = 'w-full sm:w-64 px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
+        searchInput.className = 'w-full sm:w-64 px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition';
 
         const renderTable = (data) => {
             const tbody = document.querySelector('#tvsTable tbody');
             if (!tbody) return;
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500 dark:text-gray-400">Nenhuma televisão encontrada</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">Nenhuma televisão encontrada</td></tr>`;
                 return;
             }
             tbody.innerHTML = data.map(tv => `
-                <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
-                    <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">#${tv.id}</td>
-                    <td class="py-3 px-4 font-medium text-gray-800 dark:text-white">${tv.name}</td>
-                    <td class="py-3 px-4 text-sm font-mono text-gray-600 dark:text-gray-300">${tv.codigo || '—'}</td>
-                    <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">
-                        ${tv.active_playlist ? `<span class="text-emerald-600 dark:text-emerald-400 font-medium">${tv.active_playlist.name}</span> <span class="text-xs text-gray-400">(${tv.active_playlist.items_count} itens)</span>` : '<span class="text-gray-400">Nenhuma</span>'}
+                <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition">
+                    <td class="py-3 px-4 text-sm text-gray-400">#${tv.id}</td>
+                    <td class="py-3 px-4 font-medium text-white">${tv.name}</td>
+                    <td class="py-3 px-4 text-sm font-mono text-gray-300">${tv.codigo || '—'}</td>
+                    <td class="py-3 px-4 text-sm text-gray-400">
+                        ${tv.active_playlist ? `<span class="text-emerald-400 font-medium">${tv.active_playlist.name}</span> <span class="text-xs text-gray-500">(${tv.active_playlist.items_count} itens)</span>` : '<span class="text-gray-500">Nenhuma</span>'}
                     </td>
                     <td class="py-3 px-4">
-                        <button class="delete-tv text-red-500 hover:text-red-700 dark:hover:text-red-400 transition text-sm font-medium" data-id="${tv.id}">
+                        <button class="delete-tv text-red-500 hover:text-red-400 transition text-sm font-medium" data-id="${tv.id}">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </td>
@@ -333,25 +341,25 @@ async function loadTVs(container) {
 
         container.innerHTML = `
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Todas as Televisões</h3>
+                <h3 class="text-lg font-semibold text-white">Todas as Televisões</h3>
                 <button id="addTvBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium">
                     <i class="fas fa-plus"></i> Adicionar
                 </button>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center gap-3">
+            <div class="bg-gray-900 rounded-2xl shadow-sm border border-gray-800 overflow-hidden">
+                <div class="p-4 border-b border-gray-800 flex flex-wrap items-center gap-3">
                     <div class="flex-1 min-w-[200px]">${searchInput.outerHTML}</div>
-                    <span class="text-sm text-gray-400 dark:text-gray-500">${tvsWithStatus.length} televisões</span>
+                    <span class="text-sm text-gray-500">${tvsWithStatus.length} televisões</span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full" id="tvsTable">
-                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                        <thead class="bg-gray-800/50">
                             <tr>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nome</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Playlist Atual</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Playlist Atual</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -376,13 +384,13 @@ async function loadTVs(container) {
         document.getElementById('addTvBtn')?.addEventListener('click', () => {
             openModal('Nova Televisão', [
                 { label: 'Nome', id: 'tvName', type: 'text', placeholder: 'Nome da TV' },
-                { label: 'Código (opcional)', id: 'tvCodigo', type: 'text', placeholder: '1234' }
+                { label: 'Código (fornecido pela TV)', id: 'tvCodigo', type: 'text', placeholder: 'Ex: ABC123' }
             ], async (values) => {
                 const [name, codigo] = values;
-                if (!name) return showToast('Nome obrigatório', 'warning');
+                if (!name || !codigo) return showToast('Nome e código são obrigatórios', 'warning');
                 await fetchAuth('/tvs', {
                     method: 'POST',
-                    body: JSON.stringify({ name, codigo: codigo || undefined })
+                    body: JSON.stringify({ name, codigo })
                 });
                 showToast('TV adicionada com sucesso', 'success');
                 loadTVs(container);
@@ -390,52 +398,59 @@ async function loadTVs(container) {
         });
 
     } catch (err) {
-        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-400">Erro: ${err.message}</p>`;
     }
 }
 
-// ----- Mídias -----
+// ----- Mídias (com pré‑visualização corrigida) -----
 async function loadMedia(container) {
     try {
         const media = await (await fetchAuth('/media')).json();
+
         container.innerHTML = `
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Ficheiros</h3>
+                <h3 class="text-lg font-semibold text-white">Ficheiros</h3>
                 <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium cursor-pointer">
                     <i class="fas fa-upload"></i> Upload
                     <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
                 </label>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gray-900 rounded-2xl shadow-sm border border-gray-800 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full">
-                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                        <thead class="bg-gray-800/50">
                             <tr>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ficheiro</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pré-visualização</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tipo</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ficheiro</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Pré-visualização</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${media.map(m => {
                                 const isVideo = m.mime_type && m.mime_type.startsWith('video/');
+                                const fullUrl = getFullUrl(m.url);
                                 return `
-                                <tr class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
-                                    <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-400">#${m.id}</td>
-                                    <td class="py-3 px-4 text-sm font-medium text-gray-800 dark:text-white">${m.filename}</td>
+                                <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition">
+                                    <td class="py-3 px-4 text-sm text-gray-400">#${m.id}</td>
+                                    <td class="py-3 px-4 text-sm font-medium text-white">${m.filename}</td>
                                     <td class="py-3 px-4">
                                         ${isVideo ? 
-                                            `<div class="w-24 h-16 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80 transition" onclick="showLightbox('${m.url}')">
-                                                <i class="fas fa-play-circle text-4xl text-indigo-500 dark:text-indigo-400"></i>
+                                            `<div class="w-24 h-16 bg-gray-700 rounded-lg flex items-center justify-center cursor-pointer hover:opacity-80 transition" onclick="showLightbox('${m.url}')">
+                                                <i class="fas fa-play-circle text-4xl text-indigo-400"></i>
                                             </div>` :
-                                            `<img src="${m.url}" alt="${m.filename}" class="w-16 h-16 object-cover rounded-lg cursor-pointer hover:opacity-80 transition" onclick="showLightbox('${m.url}')">`
+                                            `<img src="${fullUrl}" alt="${m.filename}" class="w-16 h-16 object-cover rounded-lg cursor-pointer hover:opacity-80 transition" 
+                                                 onclick="showLightbox('${m.url}')" 
+                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                                             <div class="w-16 h-16 bg-gray-700 rounded-lg items-center justify-center text-gray-400 text-xs hidden" style="display:none;">
+                                                <i class="fas fa-image text-2xl"></i>
+                                             </div>`
                                         }
                                     </td>
-                                    <td class="py-3 px-4 text-sm text-gray-500 dark:text-gray-400">${m.mime_type}</td>
+                                    <td class="py-3 px-4 text-sm text-gray-400">${m.mime_type}</td>
                                     <td class="py-3 px-4">
-                                        <button class="delete-media text-red-500 hover:text-red-700 dark:hover:text-red-400 transition" data-id="${m.id}">
+                                        <button class="delete-media text-red-500 hover:text-red-400 transition" data-id="${m.id}">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </td>
@@ -480,11 +495,11 @@ async function loadMedia(container) {
         }));
 
     } catch (err) {
-        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-400">Erro: ${err.message}</p>`;
     }
 }
 
-// ----- Playlists -----
+// ----- Playlists (igual) -----
 async function loadPlaylists(container) {
     try {
         const [playlists, media] = await Promise.all([
@@ -493,7 +508,7 @@ async function loadPlaylists(container) {
         ]);
         let html = `
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Playlists</h3>
+                <h3 class="text-lg font-semibold text-white">Playlists</h3>
                 <button id="createPlaylistBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium">
                     <i class="fas fa-plus"></i> Nova Playlist
                 </button>
@@ -503,50 +518,50 @@ async function loadPlaylists(container) {
         for (let p of playlists) {
             const items = p.items || [];
             html += `
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+                <div class="bg-gray-900 rounded-2xl shadow-sm border border-gray-800 p-5">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-                        <h4 class="font-semibold text-gray-800 dark:text-white">${p.name}</h4>
+                        <h4 class="font-semibold text-white">${p.name}</h4>
                         <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-400 dark:text-gray-500">${items.length} itens</span>
-                            <button class="delete-playlist text-red-500 hover:text-red-700 dark:hover:text-red-400 transition text-sm" data-id="${p.id}">
+                            <span class="text-xs text-gray-500">${items.length} itens</span>
+                            <button class="delete-playlist text-red-500 hover:text-red-400 transition text-sm" data-id="${p.id}">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                         </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 mb-3">
-                        <select id="mediaSelect_${p.id}" class="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300">
+                        <select id="mediaSelect_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-300">
                             <option value="">Selecione um ficheiro</option>
                             ${media.map(m => `<option value="${m.id}">${m.filename}</option>`).join('')}
                         </select>
-                        <input type="number" id="duration_${p.id}" placeholder="Segundos" value="10" class="w-20 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300">
+                        <input type="number" id="duration_${p.id}" placeholder="Segundos" value="10" class="w-20 rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-300">
                         <button class="add-item bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl transition text-sm" data-id="${p.id}">Adicionar</button>
                     </div>
                     ${items.length ? `
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
-                                <thead class="text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                                <thead class="text-gray-500 border-b border-gray-800">
                                     <tr><th class="text-left py-2 px-3">Ordem</th><th class="text-left py-2 px-3">Ficheiro</th><th class="text-left py-2 px-3">Duração (s)</th><th class="text-left py-2 px-3">Ação</th></tr>
                                 </thead>
                                 <tbody>
                                     ${items.map(item => `
-                                        <tr class="border-b border-gray-50 dark:border-gray-800">
-                                            <td class="py-2 px-3 text-gray-600 dark:text-gray-400">${item.display_order}</td>
-                                            <td class="py-2 px-3 text-gray-700 dark:text-gray-300">${item.filename}</td>
+                                        <tr class="border-b border-gray-800">
+                                            <td class="py-2 px-3 text-gray-400">${item.display_order}</td>
+                                            <td class="py-2 px-3 text-gray-300">${item.filename}</td>
                                             <td class="py-2 px-3">
-                                                <input type="number" class="duration-input w-16 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-1 py-0.5 text-sm text-gray-700 dark:text-gray-300" value="${item.duration_seconds}" min="1" data-item="${item.id}" data-playlist="${p.id}">
+                                                <input type="number" class="duration-input w-16 rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-300" value="${item.duration_seconds}" min="1" data-item="${item.id}" data-playlist="${p.id}">
                                                 <button class="update-duration bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded text-xs transition ml-1" data-item="${item.id}" data-playlist="${p.id}">Atualizar</button>
                                             </td>
                                             <td class="py-2 px-3">
-                                                <button class="move-up bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs transition mr-1" data-item="${item.id}" data-playlist="${p.id}">▲</button>
-                                                <button class="move-down bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded text-xs transition" data-item="${item.id}" data-playlist="${p.id}">▼</button>
-                                                <button class="remove-item text-red-400 hover:text-red-600 transition ml-1" data-item="${item.id}"><i class="fas fa-times"></i></button>
+                                                <button class="move-up bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-0.5 rounded text-xs transition mr-1" data-item="${item.id}" data-playlist="${p.id}">▲</button>
+                                                <button class="move-down bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-0.5 rounded text-xs transition" data-item="${item.id}" data-playlist="${p.id}">▼</button>
+                                                <button class="remove-item text-red-400 hover:text-red-300 transition ml-1" data-item="${item.id}"><i class="fas fa-times"></i></button>
                                             </td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
                             </table>
                         </div>
-                    ` : '<p class="text-sm text-gray-400 dark:text-gray-500">Nenhum item nesta playlist</p>'}
+                    ` : '<p class="text-sm text-gray-500">Nenhum item nesta playlist</p>'}
                 </div>
             `;
         }
@@ -673,11 +688,11 @@ async function loadPlaylists(container) {
         }));
 
     } catch (err) {
-        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-400">Erro: ${err.message}</p>`;
     }
 }
 
-// ----- AGENDAMENTOS -----
+// ----- AGENDAMENTOS (igual) -----
 async function loadSchedule(container) {
     try {
         const [tvs, playlists, schedules] = await Promise.all([
@@ -710,40 +725,40 @@ async function loadSchedule(container) {
 
         container.innerHTML = `
             <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">Agendamentos</h3>
+                <h3 class="text-lg font-semibold text-white">Agendamentos</h3>
                 <button id="addScheduleBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl transition flex items-center gap-2 text-sm font-medium">
                     <i class="fas fa-plus"></i> Novo Agendamento
                 </button>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gray-900 rounded-2xl shadow-sm border border-gray-800 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full">
-                        <thead class="bg-gray-50 dark:bg-gray-900/50">
+                        <thead class="bg-gray-800/50">
                             <tr>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">TV</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Playlist</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Dia</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Início</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fim</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ativo</th>
-                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Ações</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">TV</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Playlist</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Dia</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Início</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Fim</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ativo</th>
+                                <th class="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${schedules.map(s => `
-                                <tr class="border-b border-gray-100 dark:border-gray-700">
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.child_site_name}</td>
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.playlist_name}</td>
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${daysOfWeek.find(d => d.value === s.day_of_week)?.label || s.day_of_week}</td>
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.start_time}</td>
-                                    <td class="py-3 px-4 text-gray-700 dark:text-gray-300">${s.end_time || '—'}</td>
+                                <tr class="border-b border-gray-800">
+                                    <td class="py-3 px-4 text-gray-300">${s.child_site_name}</td>
+                                    <td class="py-3 px-4 text-gray-300">${s.playlist_name}</td>
+                                    <td class="py-3 px-4 text-gray-300">${daysOfWeek.find(d => d.value === s.day_of_week)?.label || s.day_of_week}</td>
+                                    <td class="py-3 px-4 text-gray-300">${s.start_time}</td>
+                                    <td class="py-3 px-4 text-gray-300">${s.end_time || '—'}</td>
                                     <td class="py-3 px-4">
-                                        <span class="px-2 py-1 text-xs rounded-full ${s.active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                        <span class="px-2 py-1 text-xs rounded-full ${s.active ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}">
                                             ${s.active ? 'Ativo' : 'Inativo'}
                                         </span>
                                     </td>
                                     <td class="py-3 px-4">
-                                        <button class="delete-schedule text-red-500 hover:text-red-700 dark:hover:text-red-400 transition" data-id="${s.id}">
+                                        <button class="delete-schedule text-red-500 hover:text-red-400 transition" data-id="${s.id}">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
                                     </td>
@@ -751,7 +766,7 @@ async function loadSchedule(container) {
                             `).join('')}
                             ${schedules.length === 0 ? `
                                 <tr>
-                                    <td colspan="7" class="text-center py-8 text-gray-500 dark:text-gray-400">Nenhum agendamento encontrado</td>
+                                    <td colspan="7" class="text-center py-8 text-gray-500">Nenhum agendamento encontrado</td>
                                 </tr>
                             ` : ''}
                         </tbody>
@@ -771,33 +786,33 @@ async function loadSchedule(container) {
             titleEl.innerText = 'Novo Agendamento';
             body.innerHTML = `
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TV</label>
-                    <select id="scheduleTV" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">TV</label>
+                    <select id="scheduleTV" class="w-full px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Selecione uma TV</option>
                         ${tvsOptions}
                     </select>
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Playlist</label>
-                    <select id="schedulePlaylist" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Playlist</label>
+                    <select id="schedulePlaylist" class="w-full px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Selecione uma playlist</option>
                         ${playlistsOptions}
                     </select>
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dia da Semana</label>
-                    <select id="scheduleDay" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Dia da Semana</label>
+                    <select id="scheduleDay" class="w-full px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="">Selecione um dia</option>
                         ${daysOptions}
                     </select>
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora de Início</label>
-                    <input type="time" id="scheduleStart" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Hora de Início</label>
+                    <input type="time" id="scheduleStart" class="w-full px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora de Fim (opcional)</label>
-                    <input type="time" id="scheduleEnd" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Hora de Fim (opcional)</label>
+                    <input type="time" id="scheduleEnd" class="w-full px-4 py-2 rounded-xl border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             `;
 
@@ -860,7 +875,7 @@ async function loadSchedule(container) {
         });
 
     } catch (err) {
-        container.innerHTML = `<p class="text-red-500 dark:text-red-400">Erro: ${err.message}</p>`;
+        container.innerHTML = `<p class="text-red-400">Erro: ${err.message}</p>`;
     }
 }
 

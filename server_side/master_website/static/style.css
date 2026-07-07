@@ -7,6 +7,8 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #000;
+    color: #e5e7eb;
 }
 
 /* Smooth transitions */
@@ -20,20 +22,14 @@ body {
     height: 6px;
 }
 ::-webkit-scrollbar-track {
-    background: transparent;
+    background: #111;
 }
 ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: #374151;
     border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
-}
-.dark ::-webkit-scrollbar-thumb {
     background: #4b5563;
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
 }
 
 /* Animações */
@@ -45,33 +41,17 @@ body {
     animation: fadeIn 0.3s ease-out;
 }
 
-/* Sidebar active state - CORRIGIDO */
+/* Sidebar active state */
 .nav-item.sidebar-active {
-    background-color: #eef2ff;
-    color: #4f46e5;
-}
-.dark .nav-item.sidebar-active {
-    background-color: rgba(79, 70, 229, 0.2);
+    background-color: #1f2937;
     color: #818cf8;
 }
-
-/* Garantir contraste no menu */
 .nav-item {
-    color: #374151; /* gray-700 */
-}
-.dark .nav-item {
-    color: #d1d5db; /* gray-300 */
+    color: #9ca3af;
 }
 .nav-item:hover {
-    background-color: #f3f4f6;
-}
-.dark .nav-item:hover {
-    background-color: rgba(55, 65, 81, 0.3);
-}
-
-/* Botões e inputs com estilo consistente */
-button, input, select {
-    font-family: inherit;
+    background-color: #1f2937;
+    color: #f3f4f6;
 }
 
 /* Tabelas responsivas */
@@ -79,44 +59,4 @@ button, input, select {
     .overflow-x-auto {
         -webkit-overflow-scrolling: touch;
     }
-}
-
-/* Dark mode overrides para elementos específicos */
-.dark .bg-white {
-    background-color: #1f2937 !important;
-}
-.dark .bg-gray-50 {
-    background-color: #111827 !important;
-}
-.dark .border-gray-100 {
-    border-color: #374151 !important;
-}
-.dark .border-gray-200 {
-    border-color: #4b5563 !important;
-}
-.dark .text-gray-500 {
-    color: #9ca3af !important;
-}
-.dark .text-gray-600 {
-    color: #d1d5db !important;
-}
-.dark .text-gray-700 {
-    color: #e5e7eb !important;
-}
-.dark .text-gray-800 {
-    color: #f3f4f6 !important;
-}
-.dark .text-gray-900 {
-    color: #f9fafb !important;
-}
-/* Sidebar links - forçar cores */
-.dark .nav-item {
-    color: #d1d5db !important;
-}
-.dark .nav-item:hover {
-    color: #f9fafb !important;
-}
-.dark .sidebar-active {
-    color: #818cf8 !important;
-    background-color: rgba(79, 70, 229, 0.2) !important;
 }
