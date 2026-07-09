@@ -1,260 +1,427 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - TV Manager</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    .bg-animated {
-      background: linear-gradient(-45deg, #0a0a0a, #1a1a2e, #16213e, #0f3460);
-      background-size: 400% 400%;
-      animation: gradient 15s ease infinite;
-    }
-    @keyframes gradient {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    .input-group:focus-within {
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5);
-    }
-    .spinner {
-      border: 2px solid rgba(255,255,255,0.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
-</head>
-<body class="bg-animated min-h-screen flex items-center justify-center p-4">
-  <div class="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-md border border-white/20">
-    <div class="text-center mb-8">
-      <div class="text-5xl mb-3">📺</div>
-      <h1 class="text-3xl font-bold text-white">TV Manager</h1>
-      <p class="text-gray-300 mt-1">Painel Administrativo</p>
-    </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - TV Manager</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <style>
+      .login-box {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 1rem;
+        padding: 2rem;
+        max-width: 400px;
+        width: 100%;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+      .login-box h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #fff;
+        text-align: center;
+      }
+      .login-box p {
+        color: #9ca3af;
+        text-align: center;
+        margin-bottom: 1.5rem;
+      }
+      .login-box input[type="text"],
+      .login-box input[type="password"] {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        border: 1px solid #374151;
+        background: #1f2937;
+        color: #fff;
+        outline: none;
+      }
+      .login-box input:focus {
+        border-color: #818cf8;
+      }
+      .login-box .btn-login {
+        width: 100%;
+        padding: 0.75rem;
+        background: #4f46e5;
+        color: #fff;
+        border: none;
+        border-radius: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .login-box .btn-login:hover {
+        background: #4338ca;
+      }
+      .login-box .btn-login:disabled {
+        opacity: 0.5;
+      }
+      .login-box .link {
+        color: #818cf8;
+        cursor: pointer;
+      }
+      .login-box .link:hover {
+        text-decoration: underline;
+      }
+      .error-msg {
+        color: #f87171;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+      }
+      .register-form {
+        margin-top: 1.5rem;
+        border-top: 1px solid #1f2937;
+        padding-top: 1.5rem;
+      }
+      .spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top: 2px solid #fff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .strength-bar {
+        height: 0.25rem;
+        background: #374151;
+        border-radius: 9999px;
+        margin-top: 0.25rem;
+        overflow: hidden;
+      }
+      .strength-bar .fill {
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s;
+      }
+      .register-disabled {
+        color: #94a3b8;
+        font-size: 0.9rem;
+        text-align: center;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 0.5rem;
+      }
+    </style>
+  </head>
+  <body
+    style="
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0a0a0a;
+      padding: 1rem;
+    "
+  >
+    <div class="login-box">
+      <h1>📺 TV Manager</h1>
+      <p>Painel Administrativo</p>
 
-    <form id="loginForm" class="space-y-5">
-      <div>
-        <label for="username" class="block text-sm font-medium text-gray-200 mb-1">Usuário</label>
-        <div class="input-group rounded-lg overflow-hidden bg-white/20 backdrop-blur-sm">
-          <input type="text" id="username" placeholder="Digite seu usuário" class="w-full px-4 py-3 bg-transparent text-white placeholder-gray-300 focus:outline-none">
-        </div>
-        <div id="usernameError" class="text-red-300 text-xs mt-1 hidden">Campo obrigatório</div>
-      </div>
-      <div>
-        <label for="password" class="block text-sm font-medium text-gray-200 mb-1">Senha</label>
-        <div class="input-group rounded-lg overflow-hidden bg-white/20 backdrop-blur-sm flex items-center">
-          <input type="password" id="password" placeholder="Digite sua senha" class="w-full px-4 py-3 bg-transparent text-white placeholder-gray-300 focus:outline-none">
-          <button type="button" id="togglePassword" class="px-3 text-gray-300 hover:text-white">
-            <i class="fas fa-eye"></i>
-          </button>
-        </div>
-        <div id="passwordError" class="text-red-300 text-xs mt-1 hidden">Campo obrigatório</div>
-      </div>
-      <div class="flex items-center justify-between">
-        <label class="flex items-center text-sm text-gray-300">
-          <input type="checkbox" id="rememberMe" class="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-          Lembrar-me
-        </label>
-      </div>
-      <button type="submit" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2">
-        <span>Entrar</span>
-        <i class="fas fa-arrow-right text-sm"></i>
-      </button>
-    </form>
-
-    <div id="errorMessage" class="mt-4 text-center text-red-300 text-sm hidden"></div>
-
-    <div class="mt-6 text-center">
-      <span class="text-gray-300">Não tem conta?</span>
-      <button id="showRegisterBtn" class="text-indigo-300 hover:text-indigo-200 font-semibold transition">Criar conta</button>
-    </div>
-
-    <div id="registerForm" class="mt-6 hidden">
-      <hr class="border-white/20 mb-6">
-      <h2 class="text-xl font-bold text-white text-center mb-4">Criar nova conta</h2>
-      <form id="registerFormSubmit" class="space-y-4">
-        <div>
-          <label for="regUsername" class="block text-sm font-medium text-gray-200">Usuário</label>
-          <input type="text" id="regUsername" placeholder="Escolha um usuário" class="w-full px-4 py-2 rounded-lg bg-white/20 backdrop-blur-sm text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-        </div>
-        <div>
-          <label for="regPassword" class="block text-sm font-medium text-gray-200">Senha</label>
-          <input type="password" id="regPassword" placeholder="Mínimo 6 caracteres" class="w-full px-4 py-2 rounded-lg bg-white/20 backdrop-blur-sm text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-          <div class="mt-1 h-1.5 w-full bg-gray-600 rounded overflow-hidden">
-            <div id="passwordStrength" class="h-full w-0 bg-green-500 transition-all duration-300"></div>
+      <form id="loginForm">
+        <div style="margin-bottom: 1rem">
+          <label
+            for="username"
+            style="
+              display: block;
+              font-size: 0.875rem;
+              color: #d1d5db;
+              margin-bottom: 0.25rem;
+            "
+            >Usuário</label
+          >
+          <input type="text" id="username" placeholder="Digite seu usuário" />
+          <div id="usernameError" class="error-msg hidden">
+            Campo obrigatório
           </div>
-          <div id="strengthText" class="text-xs text-gray-300 mt-1">Força: fraca</div>
         </div>
-        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition">Registar</button>
+        <div style="margin-bottom: 1rem">
+          <label
+            for="password"
+            style="
+              display: block;
+              font-size: 0.875rem;
+              color: #d1d5db;
+              margin-bottom: 0.25rem;
+            "
+            >Senha</label
+          >
+          <input type="password" id="password" placeholder="Digite sua senha" />
+          <div id="passwordError" class="error-msg hidden">
+            Campo obrigatório
+          </div>
+        </div>
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+          "
+        >
+          <label style="color: #9ca3af; font-size: 0.875rem">
+            <input type="checkbox" id="rememberMe" /> Lembrar-me
+          </label>
+        </div>
+        <button type="submit" id="loginBtn" class="btn-login">Entrar ➜</button>
+        <div id="errorMessage" class="error-msg hidden"></div>
       </form>
-      <div id="registerMessage" class="mt-2 text-center text-sm hidden"></div>
-      <div class="mt-3 text-center">
-        <button id="backToLoginBtn" class="text-gray-300 hover:text-white transition">← Voltar ao login</button>
+
+      <div
+        style="text-align: center; margin-top: 1.5rem"
+        class="register-section"
+      >
+        <span style="color: #9ca3af">Não tem conta?</span>
+        <span id="showRegisterBtn" class="link">Criar conta</span>
+        <div id="registerDisabledMsg" class="register-disabled hidden">
+          Registo desativado (apenas o primeiro utilizador pode criar conta)
+        </div>
+      </div>
+
+      <div id="registerForm" class="register-form hidden">
+        <h2
+          style="
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 1rem;
+          "
+        >
+          Criar nova conta
+        </h2>
+        <form id="registerFormSubmit">
+          <div style="margin-bottom: 1rem">
+            <label
+              for="regUsername"
+              style="
+                display: block;
+                font-size: 0.875rem;
+                color: #d1d5db;
+                margin-bottom: 0.25rem;
+              "
+              >Usuário</label
+            >
+            <input
+              type="text"
+              id="regUsername"
+              placeholder="Escolha um usuário"
+            />
+          </div>
+          <div style="margin-bottom: 1rem">
+            <label
+              for="regPassword"
+              style="
+                display: block;
+                font-size: 0.875rem;
+                color: #d1d5db;
+                margin-bottom: 0.25rem;
+              "
+              >Senha</label
+            >
+            <input
+              type="password"
+              id="regPassword"
+              placeholder="Mínimo 6 caracteres"
+            />
+            <div class="strength-bar">
+              <div
+                id="passwordStrength"
+                class="fill"
+                style="width: 0%; background: #ef4444"
+              ></div>
+            </div>
+            <div
+              id="strengthText"
+              style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem"
+            >
+              Força: fraca
+            </div>
+          </div>
+          <button type="submit" class="btn-login" style="background: #10b981">
+            Registar
+          </button>
+        </form>
+        <div id="registerMessage" class="error-msg hidden"></div>
+        <div style="text-align: center; margin-top: 1rem">
+          <span id="backToLoginBtn" class="link">← Voltar ao login</span>
+        </div>
       </div>
     </div>
-  </div>
 
-  <script>
-    const API_BASE = 'http://localhost:5000/api';
-    const loginForm = document.getElementById('loginForm');
-    const errorDiv = document.getElementById('errorMessage');
-    const loginBtn = document.getElementById('loginBtn');
-    const togglePassword = document.getElementById('togglePassword');
-    const passwordInput = document.getElementById('password');
+    <script>
+      const API_BASE = window.location.origin + "/api";
+      const loginForm = document.getElementById("loginForm");
+      const errorDiv = document.getElementById("errorMessage");
+      const loginBtn = document.getElementById("loginBtn");
 
-    togglePassword.addEventListener('click', () => {
-      const type = passwordInput.type === 'password' ? 'text' : 'password';
-      passwordInput.type = type;
-      togglePassword.querySelector('i').classList.toggle('fa-eye');
-      togglePassword.querySelector('i').classList.toggle('fa-eye-slash');
-    });
-
-    document.getElementById('username').addEventListener('blur', function() {
-      const error = document.getElementById('usernameError');
-      if (this.value.trim() === '') error.classList.remove('hidden');
-      else error.classList.add('hidden');
-    });
-    document.getElementById('password').addEventListener('blur', function() {
-      const error = document.getElementById('passwordError');
-      if (this.value.trim() === '') error.classList.remove('hidden');
-      else error.classList.add('hidden');
-    });
-
-    document.getElementById('regPassword')?.addEventListener('input', function() {
-      const val = this.value;
-      const strength = document.getElementById('passwordStrength');
-      const text = document.getElementById('strengthText');
-      let score = 0;
-      if (val.length >= 6) score++;
-      if (val.length >= 10) score++;
-      if (/[a-z]/.test(val) && /[A-Z]/.test(val)) score++;
-      if (/\d/.test(val)) score++;
-      if (/[^a-zA-Z0-9]/.test(val)) score++;
-      const percent = Math.min(score * 20, 100);
-      strength.style.width = percent + '%';
-      if (percent < 30) { strength.className = 'h-full bg-red-500 transition-all duration-300'; text.innerText = 'Força: fraca'; }
-      else if (percent < 60) { strength.className = 'h-full bg-yellow-500 transition-all duration-300'; text.innerText = 'Força: média'; }
-      else { strength.className = 'h-full bg-green-500 transition-all duration-300'; text.innerText = 'Força: forte'; }
-    });
-
-    loginForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value.trim();
-      errorDiv.classList.add('hidden');
-      if (!username || !password) {
-        errorDiv.textContent = 'Preencha todos os campos.';
-        errorDiv.classList.remove('hidden');
-        return;
-      }
-      loginBtn.disabled = true;
-      loginBtn.innerHTML = '<span class="spinner"></span> Entrando...';
-      try {
-        const res = await fetch(`${API_BASE}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          localStorage.setItem('admin_token', data.token);
-          localStorage.setItem('admin_user', data.user.username);
-          if (document.getElementById('rememberMe').checked) {
-            localStorage.setItem('remember_username', username);
-          } else {
-            localStorage.removeItem('remember_username');
+      // Verificar se já existem utilizadores
+      async function checkUsers() {
+        try {
+          const res = await fetch(`${API_BASE}/auth/has-users`);
+          const data = await res.json();
+          if (data.hasUsers) {
+            document.getElementById("showRegisterBtn").style.display = "none";
+            document
+              .getElementById("registerDisabledMsg")
+              .classList.remove("hidden");
           }
-          window.location.href = '/index.html';
-        } else {
-          errorDiv.textContent = data.error || 'Falha no login';
-          errorDiv.classList.remove('hidden');
+        } catch (e) {
+          /* ignore */
         }
-      } catch (err) {
-        errorDiv.textContent = 'Erro de conexão com o servidor';
-        errorDiv.classList.remove('hidden');
-      } finally {
-        loginBtn.disabled = false;
-        loginBtn.innerHTML = '<span>Entrar</span> <i class="fas fa-arrow-right text-sm"></i>';
       }
-    });
+      checkUsers();
 
-    (function() {
-      const saved = localStorage.getItem('remember_username');
-      if (saved) {
-        document.getElementById('username').value = saved;
-        document.getElementById('rememberMe').checked = true;
-      }
-    })();
+      document.getElementById("username").addEventListener("blur", function () {
+        document
+          .getElementById("usernameError")
+          .classList.toggle("hidden", this.value.trim() !== "");
+      });
+      document.getElementById("password").addEventListener("blur", function () {
+        document
+          .getElementById("passwordError")
+          .classList.toggle("hidden", this.value.trim() !== "");
+      });
 
-    const showRegisterBtn = document.getElementById('showRegisterBtn');
-    const registerFormDiv = document.getElementById('registerForm');
-    const backToLoginBtn = document.getElementById('backToLoginBtn');
-    const registerMessage = document.getElementById('registerMessage');
-
-    showRegisterBtn.addEventListener('click', () => {
-      loginForm.style.display = 'none';
-      registerFormDiv.classList.remove('hidden');
-      errorDiv.classList.add('hidden');
-      registerMessage.classList.add('hidden');
-    });
-
-    backToLoginBtn.addEventListener('click', () => {
-      loginForm.style.display = 'block';
-      registerFormDiv.classList.add('hidden');
-      errorDiv.classList.add('hidden');
-      registerMessage.classList.add('hidden');
-    });
-
-    document.getElementById('registerFormSubmit').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const username = document.getElementById('regUsername').value.trim();
-      const password = document.getElementById('regPassword').value.trim();
-      registerMessage.classList.add('hidden');
-      registerMessage.className = 'mt-2 text-center text-sm';
-      if (!username || !password) {
-        registerMessage.textContent = 'Usuário e senha são obrigatórios';
-        registerMessage.classList.add('text-red-300');
-        registerMessage.classList.remove('hidden');
-        return;
-      }
-      try {
-        const res = await fetch(`${API_BASE}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+      document
+        .getElementById("regPassword")
+        ?.addEventListener("input", function () {
+          const val = this.value;
+          const fill = document.getElementById("passwordStrength");
+          const text = document.getElementById("strengthText");
+          let score = 0;
+          if (val.length >= 6) score++;
+          if (val.length >= 10) score++;
+          if (/[a-z]/.test(val) && /[A-Z]/.test(val)) score++;
+          if (/\d/.test(val)) score++;
+          if (/[^a-zA-Z0-9]/.test(val)) score++;
+          const pct = Math.min(score * 20, 100);
+          fill.style.width = pct + "%";
+          fill.style.background =
+            pct < 30 ? "#ef4444" : pct < 60 ? "#f59e0b" : "#10b981";
+          text.textContent =
+            pct < 30
+              ? "Força: fraca"
+              : pct < 60
+                ? "Força: média"
+                : "Força: forte";
         });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          registerMessage.textContent = '✅ Conta criada! Faça login.';
-          registerMessage.classList.add('text-green-300');
-          registerMessage.classList.remove('hidden');
-          setTimeout(() => {
-            loginForm.style.display = 'block';
-            registerFormDiv.classList.add('hidden');
-            registerMessage.classList.add('hidden');
-            document.getElementById('username').value = username;
-          }, 2000);
-        } else {
-          registerMessage.textContent = data.error || 'Erro ao criar conta';
-          registerMessage.classList.add('text-red-300');
-          registerMessage.classList.remove('hidden');
+
+      loginForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value.trim();
+        errorDiv.classList.add("hidden");
+        if (!username || !password) {
+          errorDiv.textContent = "Preencha todos os campos.";
+          errorDiv.classList.remove("hidden");
+          return;
         }
-      } catch (err) {
-        registerMessage.textContent = 'Erro de conexão';
-        registerMessage.classList.add('text-red-300');
-        registerMessage.classList.remove('hidden');
-      }
-    });
-  </script>
-</body>
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = '<span class="spinner"></span> Entrando...';
+        try {
+          const res = await fetch(`${API_BASE}/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            localStorage.setItem("admin_token", data.token);
+            localStorage.setItem("admin_user", data.user.username);
+            if (document.getElementById("rememberMe").checked) {
+              localStorage.setItem("remember_username", username);
+            } else {
+              localStorage.removeItem("remember_username");
+            }
+            window.location.href = "/index.html";
+          } else {
+            errorDiv.textContent = data.error || "Falha no login";
+            errorDiv.classList.remove("hidden");
+          }
+        } catch (err) {
+          errorDiv.textContent = "Erro de conexão";
+          errorDiv.classList.remove("hidden");
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.innerHTML = "Entrar ➜";
+        }
+      });
+
+      (function () {
+        const saved = localStorage.getItem("remember_username");
+        if (saved) {
+          document.getElementById("username").value = saved;
+          document.getElementById("rememberMe").checked = true;
+        }
+      })();
+
+      const showRegisterBtn = document.getElementById("showRegisterBtn");
+      const registerFormDiv = document.getElementById("registerForm");
+      const backToLoginBtn = document.getElementById("backToLoginBtn");
+      const registerMessage = document.getElementById("registerMessage");
+
+      showRegisterBtn.addEventListener("click", () => {
+        loginForm.style.display = "none";
+        registerFormDiv.classList.remove("hidden");
+        errorDiv.classList.add("hidden");
+        registerMessage.classList.add("hidden");
+      });
+
+      backToLoginBtn.addEventListener("click", () => {
+        loginForm.style.display = "block";
+        registerFormDiv.classList.add("hidden");
+        errorDiv.classList.add("hidden");
+        registerMessage.classList.add("hidden");
+      });
+
+      document
+        .getElementById("registerFormSubmit")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const username = document.getElementById("regUsername").value.trim();
+          const password = document.getElementById("regPassword").value.trim();
+          registerMessage.classList.add("hidden");
+          registerMessage.className = "error-msg";
+          if (!username || !password) {
+            registerMessage.textContent = "Usuário e senha são obrigatórios";
+            registerMessage.classList.remove("hidden");
+            return;
+          }
+          try {
+            const res = await fetch(`${API_BASE}/auth/register`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              registerMessage.textContent = "✅ Conta criada! Faça login.";
+              registerMessage.style.color = "#6ee7b7";
+              registerMessage.classList.remove("hidden");
+              setTimeout(() => {
+                loginForm.style.display = "block";
+                registerFormDiv.classList.add("hidden");
+                registerMessage.classList.add("hidden");
+                document.getElementById("username").value = username;
+              }, 2000);
+            } else {
+              registerMessage.textContent = data.error || "Erro ao criar conta";
+              registerMessage.style.color = "#f87171";
+              registerMessage.classList.remove("hidden");
+            }
+          } catch (err) {
+            registerMessage.textContent = "Erro de conexão";
+            registerMessage.style.color = "#f87171";
+            registerMessage.classList.remove("hidden");
+          }
+        });
+    </script>
+  </body>
 </html>

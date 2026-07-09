@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS playlists (
 -- playlist_items (itens da playlist com ordem)
 -- duration_seconds mantém-se apenas como tempo interno de exibição de imagens
 -- (já não é editável pelo utilizador). start_time/end_time definem a QUE HORAS
--- do dia este item pode ser mostrado na TV (ex: 08:00 às 20:00). Se ficarem
--- vazios, o item é mostrado a qualquer hora.
+-- do dia este item pode ser mostrado na TV (ex: 08:00 às 20:00). days_of_week
+-- define em QUE DIAS DA SEMANA (ex: "MON,TUE,WED"), vazio = todos os dias.
 CREATE TABLE IF NOT EXISTS playlist_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     playlist_id INTEGER NOT NULL,
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS playlist_items (
     duration_seconds INTEGER DEFAULT 10,
     start_time TEXT,
     end_time TEXT,
+    days_of_week TEXT,
     display_order INTEGER NOT NULL,
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
     FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE
