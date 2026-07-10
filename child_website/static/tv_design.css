@@ -1,5 +1,5 @@
 /* ============================================================
-   CSS COMPLETO - DESIGN MODERNO
+   CSS COMPLETO - DESIGN MODERNO (SEM CONTROLES)
    ============================================================ */
 * {
     margin: 0;
@@ -171,7 +171,7 @@ body::before {
 }
 
 /* ============================================================
-   PLAYER EM FULLSCREEN
+   PLAYER EM FULLSCREEN - SEM CONTROLES
    ============================================================ */
 .player-container {
     display: none;
@@ -224,83 +224,8 @@ body::before {
 }
 
 /* ============================================================
-   CONTROLES DO PLAYER
+   OVERLAY DE PLAY (APENAS SE AUTOPLAY FALHAR)
    ============================================================ */
-.fullscreen-controls {
-    position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10000;
-    display: flex;
-    gap: 16px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.4s ease;
-}
-
-.fullscreen-controls.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.fullscreen-controls button {
-    background: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 40px;
-    font-size: 0.95rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.fullscreen-controls button:hover {
-    background: rgba(99, 102, 241, 0.7);
-    transform: scale(1.04);
-}
-
-.exit-fullscreen-btn {
-    position: fixed;
-    bottom: 40px;
-    right: 40px;
-    background: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
-    padding: 14px 28px;
-    border-radius: 40px;
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.4s ease, transform 0.2s ease;
-}
-
-.exit-fullscreen-btn.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.exit-fullscreen-btn:hover {
-    background: rgba(239, 68, 68, 0.7);
-    transform: scale(1.04);
-}
-
-.exit-fullscreen-btn i {
-    font-size: 1.2rem;
-}
-
 .play-overlay {
     position: absolute;
     top: 0;
@@ -343,22 +268,6 @@ body::before {
     }
     .tv-mode h2 {
         font-size: 2rem;
-    }
-    .exit-fullscreen-btn {
-        bottom: 20px;
-        right: 20px;
-        padding: 10px 18px;
-        font-size: 0.9rem;
-    }
-    .fullscreen-controls {
-        bottom: 24px;
-        gap: 10px;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    .fullscreen-controls button {
-        padding: 10px 16px;
-        font-size: 0.85rem;
     }
     .fullscreen-mode .no-media-fullscreen {
         font-size: 1.2rem;
