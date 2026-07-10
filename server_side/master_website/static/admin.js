@@ -403,9 +403,9 @@ async function loadTVs(container) {
       );
     };
 
+    // Remove o <h3> duplicado: agora apenas a toolbar e tabela
     container.innerHTML = `
       <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h3 class="text-lg font-semibold text-white">Todas as Televisões</h3>
         <button id="addTvBtn" class="btn btn-primary">➕ Adicionar</button>
       </div>
       <div class="table-container">
@@ -506,9 +506,9 @@ async function loadTVs(container) {
 async function loadMedia(container) {
   try {
     const media = await (await fetchAuth("/media")).json();
+    // Remove o <h3> duplicado
     container.innerHTML = `
       <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h3 class="text-lg font-semibold text-white">Ficheiros</h3>
         <label class="btn btn-primary cursor-pointer">
           ⬆️ Upload
           <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
@@ -601,9 +601,9 @@ async function loadPlaylists(container) {
       fetchAuth("/playlists").then((r) => r.json()),
       fetchAuth("/media").then((r) => r.json()),
     ]);
+    // Remove o <h3> duplicado
     let html = `
       <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h3 class="text-lg font-semibold text-white">Playlists</h3>
         <button id="createPlaylistBtn" class="btn btn-primary">➕ Nova Playlist</button>
       </div>
       <div class="space-y-4">
@@ -893,9 +893,9 @@ async function loadSchedule(container) {
       { value: "SUN", label: "Domingo" },
     ];
 
+    // Remove o <h3> duplicado
     container.innerHTML = `
       <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h3 class="text-lg font-semibold text-white">Agendamentos</h3>
         <button id="addScheduleBtn" class="btn btn-primary">➕ Novo Agendamento</button>
       </div>
       <div class="table-container">

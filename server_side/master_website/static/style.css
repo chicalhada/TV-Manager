@@ -82,10 +82,28 @@ nav a {
   transition: all 0.2s ease;
   font-size: 0.9rem;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 nav a:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.08);
+}
+
+/* Ícones na navegação */
+.nav-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  vertical-align: middle;
+  margin-right: 0.2rem;
+}
+
+.section-icon {
+  width: 2rem;
+  height: 2rem;
+  vertical-align: middle;
+  margin-right: 0.5rem;
 }
 
 .user-info {

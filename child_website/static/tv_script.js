@@ -186,7 +186,33 @@ async function buscarPlaylist() {
 }
 
 // ============================================================
-// 5. PLAYER - INÍCIO AUTOMÁTICO
+// 5. ENVIAR ESTADO "A REPRODUZIR AGORA" PARA O SERVIDOR
+// ============================================================
+function enviarNowPlaying(item) {
+  if (!CODIGO_TV || !socket) return;
+  if (item) {
+    var tipo = "desconhecido";
+    if (item.mime_type && item.mime_type.startsWith("video/")) tipo = "video";
+    else if (item.mime_type && item.mime_type.startsWith("image/"))
+      tipo = "imagem";
+    socket.emit("now_playing", {
+      codigo: CODIGO_TV,
+      item_name: item.name || "Desconhecido",
+      tipo: tipo,
+      url: item.url || "",
+    });
+  } else {
+    socket.emit("now_playing", {
+      codigo: CODIGO_TV,
+      item_name: null,
+      tipo: null,
+      url: null,
+    });
+  }
+}
+
+// ============================================================
+// 6. PLAYER - INÍCIO AUTOMÁTICO
 // ============================================================
 function ativarPlayer() {
   console.log("🎬 Ativando player automaticamente...");
@@ -241,7 +267,7 @@ function voltarTelaInicial() {
 }
 
 // ============================================================
-// 6. FULLSCREEN E CONTROLES - CORRIGIDO
+// 7. FULLSCREEN E CONTROLES - CORRIGIDO
 // ============================================================
 function entrarFullscreen(elemento) {
   var playerContainer = document.getElementById("playerContainer");
@@ -481,7 +507,7 @@ window.proximoItem = function () {
 };
 
 // ============================================================
-// 7. REPRODUÇÃO DE ITENS - CORRIGIDO
+// 8. REPRODUÇÃO DE ITENS - CORRIGIDO
 // ============================================================
 function pararReproducao() {
   if (temporizadorAtual) {
@@ -501,6 +527,8 @@ function pararReproducao() {
     v.currentTime = 0;
   });
   reprodutorAtivo = false;
+  // Notifica servidor que parou
+  enviarNowPlaying(null);
 }
 
 function reproduzirItem(item, onTerminar) {
@@ -561,6 +589,8 @@ function reproduzirItem(item, onTerminar) {
     video.onloadedmetadata = function () {
       console.log("📹 Vídeo carregado:", videoUrl);
       entrarFullscreen(video);
+      // Envia now playing
+      enviarNowPlaying(item);
     };
 
     video.oncanplay = function () {
@@ -571,6 +601,7 @@ function reproduzirItem(item, onTerminar) {
     video.onended = function () {
       console.log("⏹️ Vídeo terminou");
       elementoVideoAtual = null;
+      enviarNowPlaying(null);
       onTerminar();
     };
 
@@ -578,6 +609,7 @@ function reproduzirItem(item, onTerminar) {
       console.error("❌ Erro no vídeo:", e);
       console.error("URL do vídeo:", videoUrl);
       elementoVideoAtual = null;
+      enviarNowPlaying(null);
       setTimeout(onTerminar, 2000);
     };
 
@@ -601,10 +633,12 @@ function reproduzirItem(item, onTerminar) {
     img.onload = function () {
       console.log("✅ Imagem carregada");
       entrarFullscreen(img);
+      enviarNowPlaying(item);
     };
 
     img.onerror = function () {
       console.error("❌ Erro ao carregar imagem:", imgUrl);
+      enviarNowPlaying(null);
       onTerminar();
     };
 
@@ -613,6 +647,7 @@ function reproduzirItem(item, onTerminar) {
     var duracao = (item.duration_seconds || 10) * 1000;
     temporizadorAtual = setTimeout(function () {
       temporizadorAtual = null;
+      enviarNowPlaying(null);
       onTerminar();
     }, duracao);
   } else {
@@ -631,7 +666,10 @@ function reproduzirItem(item, onTerminar) {
             max-width: 80%;
         `;
     entrarFullscreen(msgDiv);
+    // Envia mesmo sem mídia
+    enviarNowPlaying(item);
     setTimeout(function () {
+      enviarNowPlaying(null);
       onTerminar();
     }, 3000);
   }
@@ -652,6 +690,7 @@ function iniciarReproducao() {
 
   if (!itemsPlaylist || itemsPlaylist.length === 0) {
     console.log("📭 Nenhum item para reproduzir");
+    enviarNowPlaying(null);
     return;
   }
 
@@ -678,7 +717,7 @@ function iniciarReproducao() {
 }
 
 // ============================================================
-// 8. UI
+// 9. UI
 // ============================================================
 function renderizarUI(playlist, statusMensagem) {
   var root = document.getElementById("appRoot");
@@ -729,7 +768,7 @@ function renderizarUI(playlist, statusMensagem) {
 }
 
 // ============================================================
-// 9. POLLING E INICIALIZAÇÃO
+// 10. POLLING E INICIALIZAÇÃO
 // ============================================================
 async function atualizarPlaylist() {
   console.log("🔄 Atualizando playlist...");
@@ -759,7 +798,7 @@ async function atualizarPlaylist() {
 }
 
 // ============================================================
-// 10. INICIALIZAÇÃO
+// 11. INICIALIZAÇÃO
 // ============================================================
 (async function iniciar() {
   console.log("🚀 Inicializando TV Manager com AUTOPLAY TOTAL...");
