@@ -91,21 +91,6 @@ nav a:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Ícones na navegação */
-.nav-icon {
-  width: 1.2rem;
-  height: 1.2rem;
-  vertical-align: middle;
-  margin-right: 0.2rem;
-}
-
-.section-icon {
-  width: 2rem;
-  height: 2rem;
-  vertical-align: middle;
-  margin-right: 0.5rem;
-}
-
 .user-info {
   display: flex;
   align-items: center;
@@ -147,18 +132,17 @@ nav a:hover {
 section {
   scroll-margin-top: 6rem;
 }
+.section-header {
+  margin-bottom: 1.5rem;
+}
 .section-title {
   font-size: 2rem;
   font-weight: 700;
   color: #f1f5f9;
-  margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   letter-spacing: -0.5px;
-}
-.section-title .icon {
-  color: #818cf8;
 }
 
 /* ===== CARDS (Dashboard) ===== */
@@ -270,6 +254,14 @@ section {
 }
 .table-container tr:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+/* Rodapé da tabela com botão à direita */
+.table-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ===== PLAYLIST CARDS ===== */
@@ -596,25 +588,27 @@ section {
   font-size: 0.7rem;
 }
 
-/* ===== CHECKBOX PILLS ===== */
-.dia-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.125rem 0.6rem;
-  border-radius: 9999px;
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: #cbd5e1;
-  cursor: pointer;
-  transition: 0.2s;
-  font-size: 0.75rem;
+/* ===== SELECT MÚLTIPLO (dias) ===== */
+.dias-select {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  color: #e2e8f0;
+  padding: 0.25rem;
+  min-width: 6rem;
+  font-size: 0.8rem;
 }
-.dia-pill:hover {
-  background: rgba(30, 41, 59, 0.9);
+.dias-select option {
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  background: #1e293b;
 }
-.dia-pill input {
-  margin-right: 0.125rem;
+.dias-select option:checked {
+  background: #4f46e5;
+  color: #fff;
+}
+.dias-select option:hover {
+  background: #374151;
 }
 
 /* ===== UTILITÁRIOS ===== */
@@ -630,6 +624,9 @@ section {
 .justify-between {
   justify-content: space-between;
 }
+.justify-end {
+  justify-content: flex-end;
+}
 .gap-1 {
   gap: 0.25rem;
 }
@@ -644,6 +641,9 @@ section {
 }
 .mt-1 {
   margin-top: 0.25rem;
+}
+.mt-6 {
+  margin-top: 1.5rem;
 }
 .mb-1 {
   margin-bottom: 0.25rem;
@@ -741,46 +741,6 @@ section {
   border-top-color: transparent;
 }
 
-/* ===== RESPONSIVIDADE ===== */
-@media (max-width: 640px) {
-  .px-6 {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-  .py-10 {
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
-  }
-  .section-title {
-    font-size: 1.5rem;
-  }
-  .card .value {
-    font-size: 1.6rem;
-  }
-  .table-container td,
-  .table-container th {
-    padding: 0.6rem 0.5rem;
-    font-size: 0.8rem;
-  }
-  .playlist-add-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .playlist-items-table {
-    font-size: 0.75rem;
-  }
-  .playlist-items-table th,
-  .playlist-items-table td {
-    padding: 0.3rem 0.3rem;
-  }
-  .thumbnail-video,
-  .thumbnail-image,
-  .thumbnail-placeholder {
-    width: 3.5rem;
-    height: 2.5rem;
-  }
-}
-
 /* ===== BARRA DE ESTATÍSTICAS (Dashboard) ===== */
 .dashboard-bar {
   background: rgba(17, 24, 39, 0.85);
@@ -824,31 +784,44 @@ section {
   color: #fff;
 }
 
-/* ===== SELECT MÚLTIPLO (dias) ===== */
-.dias-select {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.5rem;
-  color: #e2e8f0;
-  padding: 0.25rem;
-  min-width: 6rem;
-  font-size: 0.8rem;
-}
-.dias-select option {
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.25rem;
-  background: #1e293b;
-}
-.dias-select option:checked {
-  background: #4f46e5;
-  color: #fff;
-}
-.dias-select option:hover {
-  background: #374151;
-}
-
-/* RESPONSIVIDADE */
+/* ===== RESPONSIVIDADE ===== */
 @media (max-width: 640px) {
+  .px-6 {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .py-10 {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+  .section-title {
+    font-size: 1.5rem;
+  }
+  .card .value {
+    font-size: 1.6rem;
+  }
+  .table-container td,
+  .table-container th {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  .playlist-add-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .playlist-items-table {
+    font-size: 0.75rem;
+  }
+  .playlist-items-table th,
+  .playlist-items-table td {
+    padding: 0.3rem 0.3rem;
+  }
+  .thumbnail-video,
+  .thumbnail-image,
+  .thumbnail-placeholder {
+    width: 3.5rem;
+    height: 2.5rem;
+  }
   .dashboard-stats {
     gap: 1rem;
     justify-content: space-around;

@@ -64,7 +64,7 @@ function showToast(message, type = "success") {
   }, 3500);
 }
 
-// ===== MODAL GENÉRICO (com suporte a select) =====
+// ===== MODAL GENÉRICO =====
 function openModal(title, fields, onConfirm) {
   const modal = document.getElementById("customModal");
   const titleEl = document.getElementById("modalTitle");
@@ -403,10 +403,10 @@ async function loadTVs(container) {
       );
     };
 
-    // Remove o <h3> duplicado: agora apenas a toolbar e tabela
+    // Cabeçalho com título (sem botão)
     container.innerHTML = `
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <button id="addTvBtn" class="btn btn-primary">➕ Adicionar</button>
+      <div class="section-header">
+        <h2 class="section-title">📺 Televisões</h2>
       </div>
       <div class="table-container">
         <div class="toolbar">
@@ -422,6 +422,9 @@ async function loadTVs(container) {
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+        <div class="table-footer">
+          <button id="addTvBtn" class="btn btn-primary">➕ Adicionar</button>
         </div>
       </div>
     `;
@@ -502,17 +505,13 @@ async function loadTVs(container) {
   }
 }
 
-// ===== MÍDIAS (com thumbnails) =====
+// ===== MÍDIAS =====
 async function loadMedia(container) {
   try {
     const media = await (await fetchAuth("/media")).json();
-    // Remove o <h3> duplicado
     container.innerHTML = `
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <label class="btn btn-primary cursor-pointer">
-          ⬆️ Upload
-          <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
-        </label>
+      <div class="section-header">
+        <h2 class="section-title">🖼️ Ficheiros</h2>
       </div>
       <div class="table-container">
         <div class="overflow-x-auto">
@@ -547,6 +546,12 @@ async function loadMedia(container) {
                 .join("")}
             </tbody>
           </table>
+        </div>
+        <div class="table-footer">
+          <label class="btn btn-primary cursor-pointer">
+            ⬆️ Upload
+            <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
+          </label>
         </div>
       </div>
     `;
@@ -594,17 +599,16 @@ async function loadMedia(container) {
   }
 }
 
-// ===== PLAYLISTS (layout melhorado) =====
+// ===== PLAYLISTS =====
 async function loadPlaylists(container) {
   try {
     const [playlists, media] = await Promise.all([
       fetchAuth("/playlists").then((r) => r.json()),
       fetchAuth("/media").then((r) => r.json()),
     ]);
-    // Remove o <h3> duplicado
     let html = `
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <button id="createPlaylistBtn" class="btn btn-primary">➕ Nova Playlist</button>
+      <div class="section-header">
+        <h2 class="section-title">📋 Playlists</h2>
       </div>
       <div class="space-y-4">
     `;
@@ -689,7 +693,12 @@ async function loadPlaylists(container) {
         </div>
       `;
     }
-    html += `</div>`;
+    html += `
+      </div>
+      <div class="mt-6 flex justify-end">
+        <button id="createPlaylistBtn" class="btn btn-primary">➕ Nova Playlist</button>
+      </div>
+    `;
     container.innerHTML = html;
 
     document
@@ -893,10 +902,9 @@ async function loadSchedule(container) {
       { value: "SUN", label: "Domingo" },
     ];
 
-    // Remove o <h3> duplicado
     container.innerHTML = `
-      <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <button id="addScheduleBtn" class="btn btn-primary">➕ Novo Agendamento</button>
+      <div class="section-header">
+        <h2 class="section-title">📅 Agendamentos</h2>
       </div>
       <div class="table-container">
         <div class="overflow-x-auto">
@@ -930,6 +938,9 @@ async function loadSchedule(container) {
               ${schedules.length === 0 ? `<tr><td colspan="7" class="text-center py-8 text-gray">Nenhum agendamento encontrado</td></tr>` : ""}
             </tbody>
           </table>
+        </div>
+        <div class="table-footer">
+          <button id="addScheduleBtn" class="btn btn-primary">➕ Novo Agendamento</button>
         </div>
       </div>
     `;
