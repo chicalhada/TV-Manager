@@ -35,16 +35,15 @@ from db import (
     delete_playlist,
     remove_playlist_item,
     get_active_playlist_for_tv,
-    get_playlist_with_items,
     add_schedule,
-    get_schedules_by_tv,
     get_all_schedules,
     update_schedule,
     delete_schedule,
     get_child_site_by_id,
     update_playlist_item,
     reorder_playlist_items,
-    init_db
+    init_db,
+    item_valido_para_data
 )
 
 app = Flask(__name__)
@@ -284,23 +283,7 @@ def delete_playlist_route(playlist_id):
     delete_playlist(playlist_id, user_id)
     return jsonify({"success": True, "message": "Playlist removida"}), 200
 
-DIAS_VALIDOS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
-
-def _normalizar_dias(days_of_week):
-    if not days_of_week:
-        return None
-    if isinstance(days_of_week, str):
-        dias = [d.strip().upper() for d in days_of_week.split(",") if d.strip()]
-    else:
-        dias = [str(d).strip().upper() for d in days_of_week if str(d).strip()]
-    dias = [d for d in dias if d in DIAS_VALIDOS]
-    return ",".join(dias) if dias else None
-
-def _validar_horario(start_time, end_time):
-    if start_time and end_time and start_time >= end_time:
-        return "A hora de início tem de ser anterior à hora de fim"
-    return None
-
+# ========== Playlist Items com selected_dates ==========
 @app.route("/api/playlists/<int:playlist_id>/items", methods=["POST"])
 @login_required
 def add_item_to_playlist(playlist_id):
@@ -309,13 +292,20 @@ def add_item_to_playlist(playlist_id):
     media_id = data.get("media_id")
     start_time = data.get("start_time") or None
     end_time = data.get("end_time") or None
-    days_of_week = _normalizar_dias(data.get("days_of_week"))
+    selected_dates = data.get("selected_dates")
+
+    if isinstance(selected_dates, list):
+        selected_dates = ",".join(selected_dates)
+    elif selected_dates is None:
+        selected_dates = None
+    else:
+        selected_dates = str(selected_dates)
 
     if not media_id:
         return jsonify({"error": "media_id é obrigatório"}), 400
-    erro = _validar_horario(start_time, end_time)
-    if erro:
-        return jsonify({"error": erro}), 400
+
+    if start_time and end_time and start_time >= end_time:
+        return jsonify({"error": "A hora de início tem de ser anterior à hora de fim"}), 400
 
     playlist = get_playlist(playlist_id)
     if not playlist or playlist['user_id'] != user_id:
@@ -324,7 +314,7 @@ def add_item_to_playlist(playlist_id):
     items = get_playlist_items(playlist_id, user_id)
     next_order = len(items) + 1
     add_playlist_item(playlist_id, media_id, duration_seconds=10, display_order=next_order,
-                      start_time=start_time, end_time=end_time, days_of_week=days_of_week)
+                      start_time=start_time, end_time=end_time, selected_dates=selected_dates)
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 201
 
@@ -335,16 +325,23 @@ def update_playlist_item_route(playlist_id, item_id):
     data = request.get_json()
     start_time = data.get("start_time") or None
     end_time = data.get("end_time") or None
-    days_of_week = _normalizar_dias(data.get("days_of_week"))
-    erro = _validar_horario(start_time, end_time)
-    if erro:
-        return jsonify({"error": erro}), 400
+    selected_dates = data.get("selected_dates")
+
+    if isinstance(selected_dates, list):
+        selected_dates = ",".join(selected_dates)
+    elif selected_dates is None:
+        selected_dates = None
+    else:
+        selected_dates = str(selected_dates)
+
+    if start_time and end_time and start_time >= end_time:
+        return jsonify({"error": "A hora de início tem de ser anterior à hora de fim"}), 400
 
     playlist = get_playlist(playlist_id)
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
 
-    update_playlist_item(item_id, playlist_id, user_id, start_time, end_time, days_of_week)
+    update_playlist_item(item_id, playlist_id, user_id, start_time, end_time, selected_dates)
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
@@ -373,6 +370,7 @@ def reorder_playlist_items_route(playlist_id):
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
+# ========== Atribuições ==========
 @app.route("/api/assign", methods=["POST"])
 @login_required
 def assign_playlist():
@@ -413,6 +411,7 @@ def get_assignments():
             })
     return jsonify(result)
 
+# ========== Agendamentos com selected_dates ==========
 @app.route("/api/schedule", methods=["GET"])
 @login_required
 def get_schedules():
@@ -431,9 +430,20 @@ def create_schedule():
     start_time = data.get("start_time")
     end_time = data.get("end_time")
     active = data.get("active", 1)
+    selected_dates = data.get("selected_dates")
 
-    if not child_site_codigo or not playlist_id or not day_of_week or not start_time:
-        return jsonify({"error": "child_site_codigo, playlist_id, day_of_week e start_time são obrigatórios"}), 400
+    if isinstance(selected_dates, list):
+        selected_dates = ",".join(selected_dates)
+    elif selected_dates is None:
+        selected_dates = None
+    else:
+        selected_dates = str(selected_dates)
+
+    if not child_site_codigo or not playlist_id or not start_time:
+        return jsonify({"error": "child_site_codigo, playlist_id e start_time são obrigatórios"}), 400
+
+    if not day_of_week and not selected_dates:
+        return jsonify({"error": "Indique o dia da semana ou uma lista de datas"}), 400
 
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
@@ -445,7 +455,7 @@ def create_schedule():
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
 
-    schedule_id = add_schedule(child_site["id"], playlist_id, day_of_week.upper(), start_time, end_time, active)
+    schedule_id = add_schedule(child_site["id"], playlist_id, day_of_week, start_time, end_time, active, selected_dates)
     return jsonify({"success": True, "schedule_id": schedule_id}), 201
 
 @app.route("/api/schedule/<int:schedule_id>", methods=["PUT"])
@@ -464,6 +474,14 @@ def update_schedule_route(schedule_id):
     start_time = data.get("start_time")
     end_time = data.get("end_time")
     active = data.get("active")
+    selected_dates = data.get("selected_dates")
+
+    if isinstance(selected_dates, list):
+        selected_dates = ",".join(selected_dates)
+    elif selected_dates is None:
+        selected_dates = None
+    else:
+        selected_dates = str(selected_dates)
 
     child_site_id = None
     if child_site_codigo:
@@ -483,10 +501,11 @@ def update_schedule_route(schedule_id):
         schedule_id,
         child_site_id=child_site_id,
         playlist_id=playlist_id,
-        day_of_week=day_of_week.upper() if day_of_week else None,
+        day_of_week=day_of_week,
         start_time=start_time,
         end_time=end_time,
-        active=active
+        active=active,
+        selected_dates=selected_dates
     )
     return jsonify({"success": True}), 200
 
@@ -500,23 +519,7 @@ def delete_schedule_route(schedule_id):
     delete_schedule(schedule_id)
     return jsonify({"success": True}), 200
 
-def _item_dentro_do_horario(item, current_time, day_of_week):
-    inicio = item.get("start_time")
-    fim = item.get("end_time")
-    if inicio and fim:
-        if inicio <= fim:
-            if not (inicio <= current_time <= fim):
-                return False
-        else:
-            if not (current_time >= inicio or current_time <= fim):
-                return False
-    dias = item.get("days_of_week")
-    if dias:
-        dias_permitidos = [d.strip() for d in dias.split(",") if d.strip()]
-        if dias_permitidos and day_of_week not in dias_permitidos:
-            return False
-    return True
-
+# ========== Rota da playlist da TV ==========
 @app.route("/api/child/<string:child_site_codigo>/playlist", methods=["GET"])
 def get_child_playlist(child_site_codigo):
     child_site = get_child_site_by_codigo(child_site_codigo)
@@ -524,22 +527,42 @@ def get_child_playlist(child_site_codigo):
         return jsonify({"error": "TV não encontrada"}), 404
 
     now = datetime.now()
-    day_of_week = now.strftime("%a").upper()
+    current_date = now.strftime("%Y-%m-%d")
     current_time = now.strftime("%H:%M")
 
-    scheduled_playlist = get_active_playlist_for_tv(child_site["id"], day_of_week, current_time)
+    scheduled_playlist = get_active_playlist_for_tv(
+        child_site["id"],
+        now.strftime("%a").upper(),
+        current_time,
+        current_date
+    )
     playlist = scheduled_playlist or get_current_playlist_for_tv(child_site["id"], child_site["user_id"])
 
     if not playlist:
         return jsonify({"error": "Nenhuma playlist atribuída a esta TV"}), 404
 
     playlist_resposta = dict(playlist)
-    playlist_resposta["items"] = [
-        item for item in playlist.get("items", [])
-        if _item_dentro_do_horario(item, current_time, day_of_week)
-    ]
+    filtered_items = []
+    for item in playlist.get("items", []):
+        # Verificar horário
+        inicio = item.get("start_time")
+        fim = item.get("end_time")
+        if inicio and fim:
+            if inicio <= fim:
+                if not (inicio <= current_time <= fim):
+                    continue
+            else:
+                if not (current_time >= inicio or current_time <= fim):
+                    continue
+        # Verificar datas selecionadas
+        if not item_valido_para_data(item, current_date):
+            continue
+        filtered_items.append(item)
+
+    playlist_resposta["items"] = filtered_items
     return jsonify(playlist_resposta)
 
+# ========== Autenticação ==========
 @app.route("/api/auth/register", methods=["POST"])
 def register():
     if has_users():
@@ -609,6 +632,7 @@ def get_current_user():
     except jwt.InvalidTokenError:
         return jsonify({"error": "Token inválido"}), 401
 
+# ========== Utilizadores (admin) ==========
 @app.route('/api/users', methods=['GET'])
 @login_required
 def list_users():
@@ -636,6 +660,7 @@ def delete_user(user_id):
     db_delete_user(user_id)
     return jsonify({'message': 'removido'}), 200
 
+# ========== WebSocket ==========
 @socketio.on('connect')
 def handle_connect():
     print(f"Cliente conectado: {request.sid}")

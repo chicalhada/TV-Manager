@@ -2,7 +2,6 @@
 // JAVASCRIPT COMPLETO - SEM CONTROLES - FULLSCREEN AUTOMÁTICO
 // ============================================================
 
-// Usa o IP do servidor que serviu a página (dinâmico)
 var SERVER_HOST = window.location.hostname;
 var API_BASE = "http://" + SERVER_HOST + ":5000";
 
@@ -133,11 +132,7 @@ async function obterOuCriarCodigo() {
     var response = await fetch(API_BASE + "/api/child/" + codigo + "/playlist");
     if (response.status === 404) {
       console.log("⚠️ Código não encontrado, registando...");
-      await fetch(API_BASE + "/api/tv/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo: codigo, device_id: deviceId }),
-      });
+      // Vai registar-se na função registarTV()
     }
   } catch (error) {
     console.warn("⚠️ Erro ao verificar código:", error);
@@ -146,6 +141,9 @@ async function obterOuCriarCodigo() {
   return codigo;
 }
 
+// ============================================================
+// FUNÇÃO REGISTAR TV CORRIGIDA (usa /api/tvs)
+// ============================================================
 async function registarTV() {
   try {
     if (socket) {
@@ -153,11 +151,22 @@ async function registarTV() {
     }
     var deviceId = obterIdDispositivo();
     var codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
-    var response = await fetch(API_BASE + "/api/tv/register", {
+    var response = await fetch(API_BASE + "/api/tvs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo: codigo, device_id: deviceId }),
+      body: JSON.stringify({
+        name: "TV-" + codigo,
+        codigo: codigo,
+        ip: null,
+      }),
     });
+    if (response.status === 409) {
+      console.log("ℹ️ TV já registada.");
+      return { status: "already_registered" };
+    }
+    if (!response.ok) {
+      throw new Error("Erro " + response.status);
+    }
     return await response.json();
   } catch (error) {
     console.error("❌ Erro ao registar TV:", error);
@@ -312,7 +321,6 @@ function entrarFullscreen(elemento) {
     tryPlayVideo(video, container);
   }
 
-  // ATIVAR FULLSCREEN AUTOMATICAMENTE (F11) - SEM BOTÕES
   if (!estaEmFullscreen) {
     var elem = container;
 
@@ -729,11 +737,8 @@ async function atualizarPlaylist() {
 
   await atualizarPlaylist();
 
-  // Remover listeners que forçavam saída do fullscreen ao perder foco
-  // (o utilizador pode sair manualmente sem interromper a reprodução)
   document.addEventListener("fullscreenchange", function () {
     if (!document.fullscreenElement && estaEmFullscreen) {
-      // Não voltar à tela inicial, apenas actualizar estado
       estaEmFullscreen = false;
       fullscreenContainer = null;
     }

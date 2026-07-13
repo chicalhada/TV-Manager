@@ -58,7 +58,7 @@ def init_db():
                 display_order INTEGER DEFAULT 0,
                 start_time TEXT,
                 end_time TEXT,
-                days_of_week TEXT,
+                selected_dates TEXT,
                 FOREIGN KEY (playlist_id) REFERENCES playlists (id) ON DELETE CASCADE,
                 FOREIGN KEY (media_id) REFERENCES media (id)
             )
@@ -78,7 +78,8 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 child_site_id INTEGER NOT NULL,
                 playlist_id INTEGER NOT NULL,
-                day_of_week TEXT NOT NULL,
+                day_of_week TEXT,
+                selected_dates TEXT,
                 start_time TEXT NOT NULL,
                 end_time TEXT,
                 active INTEGER DEFAULT 1,
@@ -87,6 +88,31 @@ def init_db():
             )
         ''')
         conn.commit()
+        
+        # Migrações para bases de dados antigas
+        try:
+            cursor.execute("ALTER TABLE playlist_items ADD COLUMN selected_dates TEXT")
+        except sqlite3.OperationalError:
+            pass  # coluna já existe
+        try:
+            cursor.execute("ALTER TABLE schedule ADD COLUMN selected_dates TEXT")
+        except sqlite3.OperationalError:
+            pass  # coluna já existe
+        try:
+            cursor.execute("ALTER TABLE schedule ADD COLUMN day_of_week TEXT")
+        except sqlite3.OperationalError:
+            pass  # coluna já existe
+        try:
+            cursor.execute("ALTER TABLE playlist_items ADD COLUMN start_time TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE playlist_items ADD COLUMN end_time TEXT")
+        except sqlite3.OperationalError:
+            pass
+        conn.commit()
+
+# ... (resto das funções, incluindo as que já estavam)
 
 def add_user(username, password_hash, email=None, role='admin'):
     with get_connection() as conn:
@@ -216,14 +242,15 @@ def delete_playlist(playlist_id, user_id):
         cursor.execute("DELETE FROM playlists WHERE id = ? AND user_id = ?", (playlist_id, user_id))
         conn.commit()
 
-def add_playlist_item(playlist_id, media_id, duration_seconds, display_order, start_time=None, end_time=None, days_of_week=None):
+def add_playlist_item(playlist_id, media_id, duration_seconds, display_order,
+                      start_time=None, end_time=None, selected_dates=None):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """INSERT INTO playlist_items
-               (playlist_id, media_id, duration_seconds, display_order, start_time, end_time, days_of_week)
+               (playlist_id, media_id, duration_seconds, display_order, start_time, end_time, selected_dates)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (playlist_id, media_id, duration_seconds, display_order, start_time, end_time, days_of_week)
+            (playlist_id, media_id, duration_seconds, display_order, start_time, end_time, selected_dates)
         )
         conn.commit()
         return cursor.lastrowid
@@ -251,15 +278,16 @@ def remove_playlist_item(item_id, playlist_id, user_id):
         """, (item_id, playlist_id, user_id))
         conn.commit()
 
-def update_playlist_item(item_id, playlist_id, user_id, start_time=None, end_time=None, days_of_week=None):
+def update_playlist_item(item_id, playlist_id, user_id,
+                         start_time=None, end_time=None, selected_dates=None):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE playlist_items
-            SET start_time = ?, end_time = ?, days_of_week = ?
+            SET start_time = ?, end_time = ?, selected_dates = ?
             WHERE id = ? AND playlist_id = ?
             AND playlist_id IN (SELECT id FROM playlists WHERE user_id = ?)
-        """, (start_time, end_time, days_of_week, item_id, playlist_id, user_id))
+        """, (start_time, end_time, selected_dates, item_id, playlist_id, user_id))
         conn.commit()
 
 def reorder_playlist_items(playlist_id, user_id, item_ids):
@@ -336,28 +364,16 @@ def get_current_active_playlist_for_tv(child_site_id):
             return playlist
         return None
 
-def add_schedule(child_site_id, playlist_id, day_of_week, start_time, end_time, active=1):
+def add_schedule(child_site_id, playlist_id, day_of_week, start_time, end_time,
+                 active=1, selected_dates=None):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO schedule (child_site_id, playlist_id, day_of_week, start_time, end_time, active)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (child_site_id, playlist_id, day_of_week, start_time, end_time, active))
+            INSERT INTO schedule (child_site_id, playlist_id, day_of_week, start_time, end_time, active, selected_dates)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (child_site_id, playlist_id, day_of_week, start_time, end_time, active, selected_dates))
         conn.commit()
         return cursor.lastrowid
-
-def get_schedules_by_tv(child_site_id):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT s.*, p.name as playlist_name, cs.name as child_site_name
-            FROM schedule s
-            JOIN playlists p ON s.playlist_id = p.id
-            JOIN child_sites cs ON s.child_site_id = cs.id
-            WHERE s.child_site_id = ?
-            ORDER BY s.day_of_week, s.start_time
-        """, (child_site_id,))
-        return [dict(row) for row in cursor.fetchall()]
 
 def get_all_schedules(user_id):
     with get_connection() as conn:
@@ -373,7 +389,7 @@ def get_all_schedules(user_id):
         return [dict(row) for row in cursor.fetchall()]
 
 def update_schedule(schedule_id, child_site_id=None, playlist_id=None, day_of_week=None,
-                    start_time=None, end_time=None, active=None):
+                    start_time=None, end_time=None, active=None, selected_dates=None):
     with get_connection() as conn:
         cursor = conn.cursor()
         updates = []
@@ -396,6 +412,9 @@ def update_schedule(schedule_id, child_site_id=None, playlist_id=None, day_of_we
         if active is not None:
             updates.append("active = ?")
             params.append(active)
+        if selected_dates is not None:
+            updates.append("selected_dates = ?")
+            params.append(selected_dates)
         params.append(schedule_id)
         query = f"UPDATE schedule SET {', '.join(updates)} WHERE id = ?"
         cursor.execute(query, params)
@@ -407,54 +426,36 @@ def delete_schedule(schedule_id):
         cursor.execute("DELETE FROM schedule WHERE id = ?", (schedule_id,))
         conn.commit()
 
-def get_active_playlist_for_tv(child_site_id, day_of_week, current_time):
+def get_active_playlist_for_tv(child_site_id, day_of_week, current_time, current_date):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT s.*, p.name as playlist_name
             FROM schedule s
             JOIN playlists p ON s.playlist_id = p.id
-            WHERE s.child_site_id = ? AND s.day_of_week = ? AND s.active = 1
-        """, (child_site_id, day_of_week))
+            WHERE s.child_site_id = ? AND s.active = 1
+              AND (s.day_of_week = ? OR s.selected_dates LIKE ?)
+        """, (child_site_id, day_of_week, f'%{current_date}%'))
         schedules = cursor.fetchall()
         for sched in schedules:
             start = sched['start_time']
             end = sched['end_time']
-            if not end:
-                playlist = get_playlist(sched['playlist_id'])
-                if playlist:
-                    playlist['items'] = get_playlist_items(playlist['id'], playlist['user_id'])
-                    return playlist
-            else:
+            if end:
                 if start <= end:
-                    if start <= current_time <= end:
-                        playlist = get_playlist(sched['playlist_id'])
-                        if playlist:
-                            playlist['items'] = get_playlist_items(playlist['id'], playlist['user_id'])
-                            return playlist
+                    if not (start <= current_time <= end):
+                        continue
                 else:
-                    if current_time >= start or current_time <= end:
-                        playlist = get_playlist(sched['playlist_id'])
-                        if playlist:
-                            playlist['items'] = get_playlist_items(playlist['id'], playlist['user_id'])
-                            return playlist
+                    if not (current_time >= start or current_time <= end):
+                        continue
+            playlist = get_playlist(sched['playlist_id'])
+            if playlist:
+                playlist['items'] = get_playlist_items(playlist['id'], playlist['user_id'])
+                return playlist
         return None
 
-def get_playlist_with_items(playlist_id):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM playlists WHERE id = ?", (playlist_id,))
-        playlist = cursor.fetchone()
-        if not playlist:
-            return None
-        result = dict(playlist)
-        cursor2 = conn.cursor()
-        cursor2.execute("""
-            SELECT pi.*, m.filename, m.url, m.mime_type
-            FROM playlist_items pi
-            JOIN media m ON pi.media_id = m.id
-            WHERE pi.playlist_id = ?
-            ORDER BY pi.display_order
-        """, (playlist_id,))
-        result['items'] = [dict(row) for row in cursor2.fetchall()]
-        return result
+def item_valido_para_data(item, current_date):
+    datas = item.get('selected_dates')
+    if not datas:
+        return True
+    datas_list = [d.strip() for d in datas.split(',') if d.strip()]
+    return current_date in datas_list

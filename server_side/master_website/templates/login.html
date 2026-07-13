@@ -264,7 +264,6 @@
       const errorDiv = document.getElementById("errorMessage");
       const loginBtn = document.getElementById("loginBtn");
 
-      // Verificar se já existem utilizadores
       async function checkUsers() {
         try {
           const res = await fetch(`${API_BASE}/auth/has-users`);
@@ -275,9 +274,7 @@
               .getElementById("registerDisabledMsg")
               .classList.remove("hidden");
           }
-        } catch (e) {
-          /* ignore */
-        }
+        } catch (e) {}
       }
       checkUsers();
 

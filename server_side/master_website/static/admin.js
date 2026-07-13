@@ -1,44 +1,93 @@
-// admin.js - Painel administrativo (sem FontAwesome)
+// admin.js - Painel administrativo (versão com seleção múltipla de datas)
 const API_BASE = window.location.origin + "/api";
 
-const DIAS_SEMANA = [
-  { value: "MON", label: "Seg" },
-  { value: "TUE", label: "Ter" },
-  { value: "WED", label: "Qua" },
-  { value: "THU", label: "Qui" },
-  { value: "FRI", label: "Sex" },
-  { value: "SAT", label: "Sáb" },
-  { value: "SUN", label: "Dom" },
-];
+// ===== FUNÇÕES AUXILIARES PARA DATAS MÚLTIPLAS =====
+function dateSelectorHtml(containerId, initialDates = "") {
+  // Converte string para array
+  let datesArray = [];
+  if (typeof initialDates === "string" && initialDates.trim() !== "") {
+    datesArray = initialDates.split(",").filter((d) => d.trim() !== "");
+  } else if (Array.isArray(initialDates)) {
+    datesArray = initialDates;
+  }
 
-function diasCheckboxesHtml(containerId, diasSelecionados = []) {
-  const diasLabels = {
-    MON: "Seg",
-    TUE: "Ter",
-    WED: "Qua",
-    THU: "Qui",
-    FRI: "Sex",
-    SAT: "Sáb",
-    SUN: "Dom",
-  };
+  const tagsHtml = datesArray
+    .map(
+      (d) => `
+        <span class="date-tag" data-date="${d.trim()}">
+            ${d.trim()}
+            <span class="remove-date" onclick="removeDateTag(this)">✖</span>
+        </span>
+    `,
+    )
+    .join("");
+
   return `
-    <select id="${containerId}" multiple class="dias-select" size="4">
-      ${DIAS_SEMANA.map(
-        (d) => `
-        <option value="${d.value}" ${diasSelecionados.includes(d.value) ? "selected" : ""}>
-          ${diasLabels[d.value]}
-        </option>
-      `,
-      ).join("")}
-    </select>
-  `;
+        <div class="date-selector" data-container="${containerId}">
+            <div class="date-tags-container">
+                ${tagsHtml}
+            </div>
+            <div class="date-input-row">
+                <input type="date" class="date-picker-input" id="${containerId}_input">
+                <button type="button" class="btn btn-sm btn-primary add-date-btn" onclick="addDateTag('${containerId}')">+ Adicionar</button>
+            </div>
+            <input type="hidden" id="${containerId}_hidden" value="${datesArray.join(",")}">
+        </div>
+    `;
 }
 
-function lerDiasSelecionados(containerId) {
-  const select = document.getElementById(containerId);
-  return Array.from(select.selectedOptions).map((opt) => opt.value);
+// Funções globais para manipular as tags
+window.addDateTag = function (containerId) {
+  const container = document.querySelector(
+    `.date-selector[data-container="${containerId}"]`,
+  );
+  if (!container) return;
+  const input = document.getElementById(containerId + "_input");
+  const tagsContainer = container.querySelector(".date-tags-container");
+  const hidden = document.getElementById(containerId + "_hidden");
+  const date = input.value;
+  if (!date) {
+    showToast("Selecione uma data", "warning");
+    return;
+  }
+  // Verificar se já existe
+  if (tagsContainer.querySelector(`[data-date="${date}"]`)) {
+    showToast("Data já adicionada", "warning");
+    return;
+  }
+  const tag = document.createElement("span");
+  tag.className = "date-tag";
+  tag.dataset.date = date;
+  tag.innerHTML = `${date} <span class="remove-date" onclick="removeDateTag(this)">✖</span>`;
+  tagsContainer.appendChild(tag);
+  // Atualizar hidden
+  const dates = Array.from(tagsContainer.querySelectorAll(".date-tag")).map(
+    (el) => el.dataset.date,
+  );
+  hidden.value = dates.join(",");
+  input.value = "";
+};
+
+window.removeDateTag = function (el) {
+  const tag = el.closest(".date-tag");
+  const container = tag.closest(".date-selector");
+  const hidden = container.querySelector('input[type="hidden"]');
+  tag.remove();
+  const dates = Array.from(container.querySelectorAll(".date-tag")).map(
+    (el) => el.dataset.date,
+  );
+  hidden.value = dates.join(",");
+};
+
+function getSelectedDates(containerId) {
+  const hidden = document.getElementById(containerId + "_hidden");
+  if (!hidden) return [];
+  return hidden.value
+    ? hidden.value.split(",").filter((d) => d.trim() !== "")
+    : [];
 }
 
+// ===== TOAST =====
 function showToast(message, type = "success") {
   const colors = {
     success: "#10b981",
@@ -87,18 +136,26 @@ function openModal(title, fields, onConfirm) {
           )
           .join("");
         return `
-          <div class="input-group">
-            <label for="${f.id}">${f.label}</label>
-            <select id="${f.id}">${options}</select>
-          </div>
-        `;
+                    <div class="input-group">
+                        <label for="${f.id}">${f.label}</label>
+                        <select id="${f.id}">${options}</select>
+                    </div>
+                `;
+      } else if (f.type === "custom") {
+        // Para campos custom como o date selector
+        return `
+                    <div class="input-group">
+                        <label>${f.label}</label>
+                        ${f.html || ""}
+                    </div>
+                `;
       } else {
         return `
-          <div class="input-group">
-            <label for="${f.id}">${f.label}</label>
-            <input type="${f.type}" id="${f.id}" value="${f.value || ""}" placeholder="${f.placeholder || ""}">
-          </div>
-        `;
+                    <div class="input-group">
+                        <label for="${f.id}">${f.label}</label>
+                        <input type="${f.type}" id="${f.id}" value="${f.value || ""}" placeholder="${f.placeholder || ""}">
+                    </div>
+                `;
       }
     })
     .join("");
@@ -114,6 +171,11 @@ function openModal(title, fields, onConfirm) {
 
   const handleConfirm = () => {
     const values = fields.map((f) => {
+      if (f.type === "custom") {
+        // Para o date selector, obter o valor do hidden
+        const hidden = document.getElementById(f.id + "_hidden");
+        return hidden ? hidden.value : "";
+      }
       const el = document.getElementById(f.id);
       return el ? el.value.trim() : "";
     });
@@ -292,14 +354,14 @@ async function loadDashboard(container) {
     container.innerHTML = stats
       .map(
         (s) => `
-      <div class="stat-item">
-        <span class="stat-icon">${s.icon}</span>
-        <div>
-          <div class="stat-value">${s.value}</div>
-          <div class="stat-label">${s.label}</div>
-        </div>
-      </div>
-    `,
+                    <div class="stat-item">
+                        <span class="stat-icon">${s.icon}</span>
+                        <div>
+                            <div class="stat-value">${s.value}</div>
+                            <div class="stat-label">${s.label}</div>
+                        </div>
+                    </div>
+                `,
       )
       .join("");
   } catch (err) {
@@ -377,17 +439,17 @@ async function loadTVs(container) {
       tbody.innerHTML = data
         .map(
           (tv) => `
-        <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition">
-          <td class="py-3 px-4 text-sm text-gray">#${tv.id}</td>
-          <td class="py-3 px-4 font-medium text-white">${tv.name}</td>
-          <td class="py-3 px-4 text-sm font-mono text-gray-light">${tv.codigo || "—"}</td>
-          <td class="py-3 px-4 text-sm text-gray">${tv.active_playlist ? `<span class="text-emerald font-medium">${tv.active_playlist.name}</span> <span class="text-xs text-gray">(${tv.active_playlist.items_count} itens)</span>` : '<span class="text-gray">Nenhuma</span>'}</td>
-          <td class="py-3 px-4 text-sm" data-now-playing="${tv.id}" data-chave-atual="${nowPlayingKey(tv)}">${renderNowPlaying(tv)}</td>
-          <td class="py-3 px-4">
-            <button class="delete-tv text-red hover:text-red transition text-sm font-medium" data-id="${tv.id}">🗑️</button>
-          </td>
-        </tr>
-      `,
+                        <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition">
+                            <td class="py-3 px-4 text-sm text-gray">#${tv.id}</td>
+                            <td class="py-3 px-4 font-medium text-white">${tv.name}</td>
+                            <td class="py-3 px-4 text-sm font-mono text-gray-light">${tv.codigo || "—"}</td>
+                            <td class="py-3 px-4 text-sm text-gray">${tv.active_playlist ? `<span class="text-emerald font-medium">${tv.active_playlist.name}</span> <span class="text-xs text-gray">(${tv.active_playlist.items_count} itens)</span>` : '<span class="text-gray">Nenhuma</span>'}</td>
+                            <td class="py-3 px-4 text-sm" data-now-playing="${tv.id}" data-chave-atual="${nowPlayingKey(tv)}">${renderNowPlaying(tv)}</td>
+                            <td class="py-3 px-4">
+                                <button class="delete-tv text-red hover:text-red transition text-sm font-medium" data-id="${tv.id}">🗑️</button>
+                            </td>
+                        </tr>
+                    `,
         )
         .join("");
 
@@ -403,31 +465,30 @@ async function loadTVs(container) {
       );
     };
 
-    // Cabeçalho com título (sem botão)
     container.innerHTML = `
-      <div class="section-header">
-        <h2 class="section-title">📺 Televisões</h2>
-      </div>
-      <div class="table-container">
-        <div class="toolbar">
-          <div class="flex-1 min-w-[200px]">${searchInput.outerHTML}</div>
-          <span class="text-sm text-gray">${tvsWithStatus.length} televisões</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table id="tvsTable">
-            <thead>
-              <tr>
-                <th>ID</th><th>Nome</th><th>Código</th><th>Playlist Atual</th><th>A reproduzir agora</th><th>Ações</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <div class="table-footer">
-          <button id="addTvBtn" class="btn btn-primary">➕ Adicionar</button>
-        </div>
-      </div>
-    `;
+            <div class="section-header">
+                <h2 class="section-title">📺 Televisões</h2>
+            </div>
+            <div class="table-container">
+                <div class="toolbar">
+                    <div class="flex-1 min-w-[200px]">${searchInput.outerHTML}</div>
+                    <span class="text-sm text-gray">${tvsWithStatus.length} televisões</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="tvsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Nome</th><th>Código</th><th>Playlist Atual</th><th>A reproduzir agora</th><th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="table-footer">
+                    <button id="addTvBtn" class="btn btn-primary">➕ Adicionar</button>
+                </div>
+            </div>
+        `;
 
     const search = document.querySelector(
       'input[placeholder="🔍 Pesquisar televisão..."]',
@@ -510,51 +571,52 @@ async function loadMedia(container) {
   try {
     const media = await (await fetchAuth("/media")).json();
     container.innerHTML = `
-      <div class="section-header">
-        <h2 class="section-title">🖼️ Ficheiros</h2>
-      </div>
-      <div class="table-container">
-        <div class="overflow-x-auto">
-          <table>
-            <thead>
-              <tr><th>ID</th><th>Ficheiro</th><th>Pré-visualização</th><th>Tipo</th><th>Ações</th></tr>
-            </thead>
-            <tbody>
-              ${media
-                .map((m) => {
-                  const isVideo =
-                    m.mime_type && m.mime_type.startsWith("video/");
-                  const fullUrl = getFullUrl(m.url);
-                  return `
-                <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition">
-                  <td class="py-3 px-4 text-sm text-gray">#${m.id}</td>
-                  <td class="py-3 px-4 text-sm font-medium text-white">${m.filename}</td>
-                  <td class="py-3 px-4">
-                    ${
-                      isVideo
-                        ? `<video src="${fullUrl}" class="thumbnail-video" muted autoplay loop playsinline preload="metadata" onclick="showLightbox('${m.url}')"></video>`
-                        : `<img src="${fullUrl}" alt="${m.filename}" class="thumbnail-image" onclick="showLightbox('${m.url}')" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="thumbnail-placeholder" style="display:none;">🖼️</div>`
-                    }
-                  </td>
-                  <td class="py-3 px-4 text-sm text-gray">${m.mime_type}</td>
-                  <td class="py-3 px-4">
-                    <button class="delete-media text-red hover:text-red transition" data-id="${m.id}">🗑️</button>
-                  </td>
-                </tr>
-              `;
-                })
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        <div class="table-footer">
-          <label class="btn btn-primary cursor-pointer">
-            ⬆️ Upload
-            <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
-          </label>
-        </div>
-      </div>
-    `;
+            <div class="section-header">
+                <h2 class="section-title">🖼️ Ficheiros</h2>
+            </div>
+            <div class="table-container">
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr><th>ID</th><th>Ficheiro</th><th>Pré-visualização</th><th>Tipo</th><th>Ações</th></tr>
+                        </thead>
+                        <tbody>
+                            ${media
+                              .map((m) => {
+                                const isVideo =
+                                  m.mime_type &&
+                                  m.mime_type.startsWith("video/");
+                                const fullUrl = getFullUrl(m.url);
+                                return `
+                                        <tr class="border-b border-gray-800 hover:bg-gray-800/50 transition">
+                                            <td class="py-3 px-4 text-sm text-gray">#${m.id}</td>
+                                            <td class="py-3 px-4 text-sm font-medium text-white" style="word-break: break-all; max-width: 250px;">${m.filename}</td>
+                                            <td class="py-3 px-4">
+                                                ${
+                                                  isVideo
+                                                    ? `<video src="${fullUrl}" class="thumbnail-video" muted autoplay loop playsinline preload="metadata" onclick="showLightbox('${m.url}')"></video>`
+                                                    : `<img src="${fullUrl}" alt="${m.filename}" class="thumbnail-image" onclick="showLightbox('${m.url}')" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="thumbnail-placeholder" style="display:none;">🖼️</div>`
+                                                }
+                                            </td>
+                                            <td class="py-3 px-4 text-sm text-gray">${m.mime_type}</td>
+                                            <td class="py-3 px-4">
+                                                <button class="delete-media text-red hover:text-red transition" data-id="${m.id}">🗑️</button>
+                                            </td>
+                                        </tr>
+                                    `;
+                              })
+                              .join("")}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-footer">
+                    <label class="btn btn-primary cursor-pointer">
+                        ⬆️ Upload
+                        <input type="file" id="mediaUpload" multiple accept="image/*,video/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+        `;
 
     document
       .getElementById("mediaUpload")
@@ -599,7 +661,7 @@ async function loadMedia(container) {
   }
 }
 
-// ===== PLAYLISTS =====
+// ===== PLAYLISTS (com seleção múltipla de datas) =====
 async function loadPlaylists(container) {
   try {
     const [playlists, media] = await Promise.all([
@@ -607,98 +669,100 @@ async function loadPlaylists(container) {
       fetchAuth("/media").then((r) => r.json()),
     ]);
     let html = `
-      <div class="section-header">
-        <h2 class="section-title">📋 Playlists</h2>
-      </div>
-      <div class="space-y-4">
-    `;
+            <div class="section-header">
+                <h2 class="section-title">📋 Playlists</h2>
+            </div>
+            <div class="space-y-4">
+        `;
     for (let p of playlists) {
       const items = p.items || [];
       html += `
-        <div class="playlist-card">
-          <div class="playlist-header">
-            <h4 class="playlist-name">${p.name}</h4>
-            <div class="playlist-actions">
-              <span class="playlist-count">${items.length} itens</span>
-              <button class="delete-playlist btn btn-danger btn-sm" data-id="${p.id}">🗑️ Eliminar</button>
-            </div>
-          </div>
-          <div class="playlist-add-item">
-            <select id="mediaSelect_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-light">
-              <option value="">Selecione um ficheiro</option>
-              ${media.map((m) => `<option value="${m.id}">${m.filename}</option>`).join("")}
-            </select>
-            <span class="text-xs text-gray">das</span>
-            <input type="time" id="startTime_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-light">
-            <span class="text-xs text-gray">até</span>
-            <input type="time" id="endTime_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-light">
-            <span class="text-xs text-gray">(vazio = sempre)</span>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray">Dias:</span>
-              ${diasCheckboxesHtml(`diasNovo_${p.id}`, [])}
-              <span class="text-xs text-gray">(nenhum = todos)</span>
-            </div>
-            <button class="add-item btn btn-success btn-sm" data-id="${p.id}">➕ Adicionar</button>
-          </div>
-          ${
-            items.length
-              ? `
-            <div class="overflow-x-auto">
-              <table class="playlist-items-table">
-                <thead>
-                  <tr><th>Ordem</th><th>Ficheiro</th><th>Pré‑vis.</th><th>Dias</th><th>Horário</th><th></th><th>Ações</th></tr>
-                </thead>
-                <tbody>
-                  ${items
-                    .map(
-                      (item) => `
-                    <tr>
-                      <td class="py-2 px-3 text-gray">${item.display_order}</td>
-                      <td class="py-2 px-3 text-gray-light">${item.filename}</td>
-                      <td class="py-2 px-3">
-                        ${
-                          item.mime_type && item.mime_type.startsWith("video/")
-                            ? `<video src="${getFullUrl(item.url)}" class="thumbnail-video" muted autoplay loop playsinline preload="metadata" onclick="showLightbox('${item.url}')"></video>`
-                            : `<img src="${getFullUrl(item.url)}" class="thumbnail-image" onclick="showLightbox('${item.url}')" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="thumbnail-placeholder" style="display:none;">🖼️</div>`
-                        }
-                      </td>
-                      <td class="py-2 px-3">
-                        ${diasCheckboxesHtml(`diasItem_${item.id}`, (item.days_of_week || "").split(",").filter(Boolean))}
-                        ${!item.days_of_week ? '<div class="text-xs text-gray mt-0.5">(todos os dias)</div>' : ""}
-                      </td>
-                      <td class="py-2 px-3">
-                        <input type="time" class="starttime-input rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-light" value="${item.start_time || ""}" data-item="${item.id}" data-playlist="${p.id}">
-                        <span class="text-gray text-xs">até</span>
-                        <input type="time" class="endtime-input rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-light" value="${item.end_time || ""}" data-item="${item.id}" data-playlist="${p.id}">
-                        ${!item.start_time && !item.end_time ? '<div class="text-xs text-gray mt-0.5">(sempre)</div>' : ""}
-                      </td>
-                      <td class="py-2 px-3">
-                        <button class="update-horario btn btn-primary btn-sm" data-item="${item.id}" data-playlist="${p.id}">🔄</button>
-                      </td>
-                      <td class="py-2 px-3">
-                        <button class="move-up btn btn-ghost btn-sm" data-item="${item.id}" data-playlist="${p.id}">▲</button>
-                        <button class="move-down btn btn-ghost btn-sm" data-item="${item.id}" data-playlist="${p.id}">▼</button>
-                        <button class="remove-item text-red hover:text-red transition" data-item="${item.id}">✖</button>
-                      </td>
-                    </tr>
-                  `,
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            </div>
-          `
-              : '<p class="text-sm text-gray mt-2">Nenhum item nesta playlist</p>'
-          }
-        </div>
-      `;
+                <div class="playlist-card">
+                    <div class="playlist-header">
+                        <h4 class="playlist-name">${p.name}</h4>
+                        <div class="playlist-actions">
+                            <span class="playlist-count">${items.length} itens</span>
+                            <button class="delete-playlist btn btn-danger btn-sm" data-id="${p.id}">🗑️ Eliminar</button>
+                        </div>
+                    </div>
+                    <div class="playlist-add-item">
+                        <select id="mediaSelect_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-light">
+                            <option value="">Selecione um ficheiro</option>
+                            ${media.map((m) => `<option value="${m.id}">${m.filename}</option>`).join("")}
+                        </select>
+                        <span class="text-xs text-gray">das</span>
+                        <input type="time" id="startTime_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-light">
+                        <span class="text-xs text-gray">até</span>
+                        <input type="time" id="endTime_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-light">
+                        <span class="text-xs text-gray">(vazio = sempre)</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray">Datas:</span>
+                            ${dateSelectorHtml(`datesNew_${p.id}`)}
+                            <span class="text-xs text-gray">(vazio = sempre)</span>
+                        </div>
+                        <button class="add-item btn btn-success btn-sm" data-id="${p.id}">➕ Adicionar</button>
+                    </div>
+                    ${
+                      items.length
+                        ? `
+                            <div class="overflow-x-auto">
+                                <table class="playlist-items-table">
+                                    <thead>
+                                        <tr><th>Ordem</th><th>Ficheiro</th><th>Pré‑vis.</th><th>Datas</th><th>Horário</th><th></th><th>Ações</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        ${items
+                                          .map(
+                                            (item) => `
+                                                <tr>
+                                                    <td class="py-2 px-3 text-gray">${item.display_order}</td>
+                                                    <td class="py-2 px-3 text-gray-light" style="word-break: break-all; max-width: 200px;">${item.filename}</td>
+                                                    <td class="py-2 px-3">
+                                                        ${
+                                                          item.mime_type &&
+                                                          item.mime_type.startsWith(
+                                                            "video/",
+                                                          )
+                                                            ? `<video src="${getFullUrl(item.url)}" class="thumbnail-video" muted autoplay loop playsinline preload="metadata" onclick="showLightbox('${item.url}')"></video>`
+                                                            : `<img src="${getFullUrl(item.url)}" class="thumbnail-image" onclick="showLightbox('${item.url}')" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="thumbnail-placeholder" style="display:none;">🖼️</div>`
+                                                        }
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        ${dateSelectorHtml(`datesItem_${item.id}`, item.selected_dates || "")}
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        <input type="time" class="starttime-input rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-light" value="${item.start_time || ""}" data-item="${item.id}" data-playlist="${p.id}">
+                                                        <span class="text-gray text-xs">até</span>
+                                                        <input type="time" class="endtime-input rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-light" value="${item.end_time || ""}" data-item="${item.id}" data-playlist="${p.id}">
+                                                        ${!item.start_time && !item.end_time ? '<div class="text-xs text-gray mt-0.5">(sempre)</div>' : ""}
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        <button class="update-horario btn btn-primary btn-sm" data-item="${item.id}" data-playlist="${p.id}">🔄</button>
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        <button class="move-up btn btn-ghost btn-sm" data-item="${item.id}" data-playlist="${p.id}">▲</button>
+                                                        <button class="move-down btn btn-ghost btn-sm" data-item="${item.id}" data-playlist="${p.id}">▼</button>
+                                                        <button class="remove-item text-red hover:text-red transition" data-item="${item.id}">✖</button>
+                                                    </td>
+                                                </tr>
+                                            `,
+                                          )
+                                          .join("")}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `
+                        : '<p class="text-sm text-gray mt-2">Nenhum item nesta playlist</p>'
+                    }
+                </div>
+            `;
     }
     html += `
-      </div>
-      <div class="mt-6 flex justify-end">
-        <button id="createPlaylistBtn" class="btn btn-primary">➕ Nova Playlist</button>
-      </div>
-    `;
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="createPlaylistBtn" class="btn btn-primary">➕ Nova Playlist</button>
+            </div>
+        `;
     container.innerHTML = html;
 
     document
@@ -734,7 +798,7 @@ async function loadPlaylists(container) {
         const mid = document.getElementById(`mediaSelect_${pid}`).value;
         const startTime = document.getElementById(`startTime_${pid}`).value;
         const endTime = document.getElementById(`endTime_${pid}`).value;
-        const diasSelecionados = lerDiasSelecionados(`diasNovo_${pid}`);
+        const selectedDates = getSelectedDates(`datesNew_${pid}`);
         if (!mid) return showToast("Selecione um ficheiro", "warning");
         if ((startTime && !endTime) || (!startTime && endTime))
           return showToast(
@@ -753,7 +817,7 @@ async function loadPlaylists(container) {
               media_id: parseInt(mid),
               start_time: startTime || null,
               end_time: endTime || null,
-              days_of_week: diasSelecionados,
+              selected_dates: selectedDates,
             }),
           });
           showToast("Item adicionado", "success");
@@ -768,15 +832,13 @@ async function loadPlaylists(container) {
       btn.addEventListener("click", async function () {
         const itemId = this.dataset.item;
         const playlistId = this.dataset.playlist;
-        const startInput = document.querySelector(
+        const startTime = document.querySelector(
           `.starttime-input[data-item="${itemId}"]`,
-        );
-        const endInput = document.querySelector(
+        ).value;
+        const endTime = document.querySelector(
           `.endtime-input[data-item="${itemId}"]`,
-        );
-        const startTime = startInput.value;
-        const endTime = endInput.value;
-        const diasSelecionados = lerDiasSelecionados(`diasItem_${itemId}`);
+        ).value;
+        const selectedDates = getSelectedDates(`datesItem_${itemId}`);
         if ((startTime && !endTime) || (!startTime && endTime))
           return showToast(
             "Defina as duas horas ou deixe ambas vazias",
@@ -793,10 +855,10 @@ async function loadPlaylists(container) {
             body: JSON.stringify({
               start_time: startTime || null,
               end_time: endTime || null,
-              days_of_week: diasSelecionados,
+              selected_dates: selectedDates,
             }),
           });
-          showToast("Horário atualizado!", "success");
+          showToast("Dados atualizados!", "success");
           loadPlaylists(container);
         } catch (err) {
           showToast("Erro ao atualizar", "error");
@@ -883,7 +945,7 @@ async function loadPlaylists(container) {
   }
 }
 
-// ===== AGENDAMENTOS =====
+// ===== AGENDAMENTOS (com seleção múltipla de datas) =====
 async function loadSchedule(container) {
   try {
     const [tvs, playlists, schedules] = await Promise.all([
@@ -903,47 +965,48 @@ async function loadSchedule(container) {
     ];
 
     container.innerHTML = `
-      <div class="section-header">
-        <h2 class="section-title">📅 Agendamentos</h2>
-      </div>
-      <div class="table-container">
-        <div class="overflow-x-auto">
-          <table>
-            <thead>
-              <tr><th>TV</th><th>Playlist</th><th>Dia</th><th>Início</th><th>Fim</th><th>Ativo</th><th>Ações</th></tr>
-            </thead>
-            <tbody>
-              ${schedules
-                .map(
-                  (s) => `
-                <tr class="border-b border-gray-800">
-                  <td class="py-3 px-4 text-gray-light">${s.child_site_name}</td>
-                  <td class="py-3 px-4 text-gray-light">${s.playlist_name}</td>
-                  <td class="py-3 px-4 text-gray-light">${daysOfWeek.find((d) => d.value === s.day_of_week)?.label || s.day_of_week}</td>
-                  <td class="py-3 px-4 text-gray-light">${s.start_time}</td>
-                  <td class="py-3 px-4 text-gray-light">${s.end_time || "—"}</td>
-                  <td class="py-3 px-4">
-                    <span class="px-2 py-1 text-xs rounded-full ${s.active ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"}">
-                      ${s.active ? "✅ Ativo" : "⛔ Inativo"}
-                    </span>
-                  </td>
-                  <td class="py-3 px-4">
-                    <button class="edit-schedule text-indigo hover:text-indigo transition mr-2" data-id="${s.id}">✏️</button>
-                    <button class="delete-schedule text-red hover:text-red transition" data-id="${s.id}">🗑️</button>
-                  </td>
-                </tr>
-              `,
-                )
-                .join("")}
-              ${schedules.length === 0 ? `<tr><td colspan="7" class="text-center py-8 text-gray">Nenhum agendamento encontrado</td></tr>` : ""}
-            </tbody>
-          </table>
-        </div>
-        <div class="table-footer">
-          <button id="addScheduleBtn" class="btn btn-primary">➕ Novo Agendamento</button>
-        </div>
-      </div>
-    `;
+            <div class="section-header">
+                <h2 class="section-title">📅 Agendamentos</h2>
+            </div>
+            <div class="table-container">
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr><th>TV</th><th>Playlist</th><th>Dia da semana</th><th>Datas específicas</th><th>Início</th><th>Fim</th><th>Ativo</th><th>Ações</th></tr>
+                        </thead>
+                        <tbody>
+                            ${schedules
+                              .map(
+                                (s) => `
+                                    <tr class="border-b border-gray-800">
+                                        <td class="py-3 px-4 text-gray-light">${s.child_site_name}</td>
+                                        <td class="py-3 px-4 text-gray-light">${s.playlist_name}</td>
+                                        <td class="py-3 px-4 text-gray-light">${daysOfWeek.find((d) => d.value === s.day_of_week)?.label || "—"}</td>
+                                        <td class="py-3 px-4 text-gray-light">${s.selected_dates ? s.selected_dates.replace(/,/g, ", ") : "—"}</td>
+                                        <td class="py-3 px-4 text-gray-light">${s.start_time}</td>
+                                        <td class="py-3 px-4 text-gray-light">${s.end_time || "—"}</td>
+                                        <td class="py-3 px-4">
+                                            <span class="px-2 py-1 text-xs rounded-full ${s.active ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"}">
+                                                ${s.active ? "✅ Ativo" : "⛔ Inativo"}
+                                            </span>
+                                        </td>
+                                        <td class="py-3 px-4">
+                                            <button class="edit-schedule text-indigo hover:text-indigo transition mr-2" data-id="${s.id}">✏️</button>
+                                            <button class="delete-schedule text-red hover:text-red transition" data-id="${s.id}">🗑️</button>
+                                        </td>
+                                    </tr>
+                                `,
+                              )
+                              .join("")}
+                            ${schedules.length === 0 ? `<tr><td colspan="8" class="text-center py-8 text-gray">Nenhum agendamento encontrado</td></tr>` : ""}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-footer">
+                    <button id="addScheduleBtn" class="btn btn-primary">➕ Novo Agendamento</button>
+                </div>
+            </div>
+        `;
 
     document
       .getElementById("addScheduleBtn")
@@ -963,65 +1026,85 @@ async function loadSchedule(container) {
         ? tvs.find((t) => t.id === schedule.child_site_id)
         : null;
 
+      // Criar um ID único para o date selector
+      const dateSelectorId = isEdit
+        ? `scheduleDates_edit_${schedule.id}`
+        : `scheduleDates_new`;
+      const initialDates =
+        isEdit && schedule.selected_dates ? schedule.selected_dates : "";
+
+      const fields = [
+        {
+          label: "TV",
+          id: "scheduleTV",
+          type: "select",
+          options: tvs.map((tv) => ({
+            value: tv.codigo,
+            label: `${tv.name} (${tv.codigo})`,
+          })),
+          value: tvAtual ? tvAtual.codigo : "",
+        },
+        {
+          label: "Playlist",
+          id: "schedulePlaylist",
+          type: "select",
+          options: playlists.map((p) => ({ value: p.id, label: p.name })),
+          value: isEdit ? schedule.playlist_id : "",
+        },
+        {
+          label: "Dia da Semana (opcional)",
+          id: "scheduleDay",
+          type: "select",
+          options: [{ value: "", label: "— Nenhum —" }].concat(
+            daysOfWeek.map((d) => ({ value: d.value, label: d.label })),
+          ),
+          value: isEdit && schedule.day_of_week ? schedule.day_of_week : "",
+        },
+        {
+          label: "Datas específicas (opcional)",
+          id: dateSelectorId,
+          type: "custom",
+          html: dateSelectorHtml(dateSelectorId, initialDates),
+        },
+        {
+          label: "Hora de Início",
+          id: "scheduleStart",
+          type: "time",
+          value: isEdit ? schedule.start_time : "",
+        },
+        {
+          label: "Hora de Fim (opcional)",
+          id: "scheduleEnd",
+          type: "time",
+          value: isEdit && schedule.end_time ? schedule.end_time : "",
+        },
+      ];
+
       openModal(
         isEdit ? "Editar Agendamento" : "Novo Agendamento",
-        [
-          {
-            label: "TV",
-            id: "scheduleTV",
-            type: "select",
-            options: tvs.map((tv) => ({
-              value: tv.codigo,
-              label: `${tv.name} (${tv.codigo})`,
-            })),
-            value: tvAtual ? tvAtual.codigo : "",
-          },
-          {
-            label: "Playlist",
-            id: "schedulePlaylist",
-            type: "select",
-            options: playlists.map((p) => ({ value: p.id, label: p.name })),
-            value: isEdit ? schedule.playlist_id : "",
-          },
-          {
-            label: "Dia da Semana",
-            id: "scheduleDay",
-            type: "select",
-            options: daysOfWeek.map((d) => ({
-              value: d.value,
-              label: d.label,
-            })),
-            value: isEdit ? schedule.day_of_week : "",
-          },
-          {
-            label: "Hora de Início",
-            id: "scheduleStart",
-            type: "time",
-            value: isEdit ? schedule.start_time : "",
-          },
-          {
-            label: "Hora de Fim (opcional)",
-            id: "scheduleEnd",
-            type: "time",
-            value: isEdit && schedule.end_time ? schedule.end_time : "",
-          },
-        ],
+        fields,
         async (values) => {
           const [
             child_site_codigo,
             playlist_id,
             day_of_week,
+            selected_dates_str,
             start_time,
             end_time,
           ] = values;
-          if (
-            !child_site_codigo ||
-            !playlist_id ||
-            !day_of_week ||
-            !start_time
-          ) {
+          // selected_dates_str vem do hidden
+          const selectedDates = selected_dates_str
+            ? selected_dates_str.split(",").filter((d) => d.trim() !== "")
+            : [];
+          if (!child_site_codigo || !playlist_id || !start_time) {
             return showToast(
               "Preencha todos os campos obrigatórios",
+              "warning",
+            );
+          }
+          if (!day_of_week && selectedDates.length === 0) {
+            return showToast(
+              "Indique o dia da semana ou pelo menos uma data",
               "warning",
             );
           }
@@ -1032,9 +1115,10 @@ async function loadSchedule(container) {
                 body: JSON.stringify({
                   child_site_codigo,
                   playlist_id: parseInt(playlist_id),
-                  day_of_week,
+                  day_of_week: day_of_week || null,
                   start_time,
                   end_time: end_time || null,
+                  selected_dates: selectedDates,
                 }),
               });
               showToast("Agendamento atualizado!", "success");
@@ -1044,9 +1128,10 @@ async function loadSchedule(container) {
                 body: JSON.stringify({
                   child_site_codigo,
                   playlist_id: parseInt(playlist_id),
-                  day_of_week,
+                  day_of_week: day_of_week || null,
                   start_time,
                   end_time: end_time || null,
+                  selected_dates: selectedDates,
                 }),
               });
               showToast("Agendamento criado!", "success");
