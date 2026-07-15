@@ -28,12 +28,27 @@ function dateSelectorHtml(containerId, initialDates = "") {
                 ${tagsHtml}
             </div>
             <div class="date-input-row">
-                <input type="date" class="date-picker-input" id="${containerId}_input">
+                <input type="date" class="date-picker-input" id="${containerId}_start" title="De">
+                <span class="text-xs text-gray">até</span>
+                <input type="date" class="date-picker-input" id="${containerId}_end" title="Até (opcional, para adicionar um intervalo de dias)">
                 <button type="button" class="btn btn-sm btn-primary add-date-btn" onclick="addDateTag('${containerId}')">+ Adicionar</button>
             </div>
             <input type="hidden" id="${containerId}_hidden" value="${datesArray.join(",")}">
         </div>
     `;
+}
+
+// Converte uma data (YYYY-MM-DD) num objeto Date em hora local (evita problemas de fuso horário)
+function parseDataLocal(dataStr) {
+  const [ano, mes, dia] = dataStr.split("-").map(Number);
+  return new Date(ano, mes - 1, dia);
+}
+
+function formatarDataLocal(date) {
+  const ano = date.getFullYear();
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const dia = String(date.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
 }
 
 // Funções globais para manipular as tags
@@ -42,30 +57,61 @@ window.addDateTag = function (containerId) {
     `.date-selector[data-container="${containerId}"]`,
   );
   if (!container) return;
-  const input = document.getElementById(containerId + "_input");
+  const startInput = document.getElementById(containerId + "_start");
+  const endInput = document.getElementById(containerId + "_end");
   const tagsContainer = container.querySelector(".date-tags-container");
   const hidden = document.getElementById(containerId + "_hidden");
-  const date = input.value;
-  if (!date) {
-    showToast("Selecione uma data", "warning");
+  const startDate = startInput.value;
+  const endDate = endInput.value;
+
+  if (!startDate) {
+    showToast("Selecione pelo menos a data inicial", "warning");
     return;
   }
-  // Verificar se já existe
-  if (tagsContainer.querySelector(`[data-date="${date}"]`)) {
-    showToast("Data já adicionada", "warning");
+  if (endDate && endDate < startDate) {
+    showToast("A data final tem de ser depois da data inicial", "warning");
     return;
   }
-  const tag = document.createElement("span");
-  tag.className = "date-tag";
-  tag.dataset.date = date;
-  tag.innerHTML = `${date} <span class="remove-date" onclick="removeDateTag(this)">✖</span>`;
-  tagsContainer.appendChild(tag);
+
+  // Construir a lista de datas a adicionar (um único dia, ou o intervalo completo)
+  const datasParaAdicionar = [];
+  if (endDate && endDate !== startDate) {
+    let atual = parseDataLocal(startDate);
+    const fim = parseDataLocal(endDate);
+    while (atual <= fim) {
+      datasParaAdicionar.push(formatarDataLocal(atual));
+      atual.setDate(atual.getDate() + 1);
+    }
+  } else {
+    datasParaAdicionar.push(startDate);
+  }
+
+  let novasDatas = 0;
+  datasParaAdicionar.forEach((date) => {
+    if (tagsContainer.querySelector(`[data-date="${date}"]`)) return;
+    const tag = document.createElement("span");
+    tag.className = "date-tag";
+    tag.dataset.date = date;
+    tag.innerHTML = `${date} <span class="remove-date" onclick="removeDateTag(this)">✖</span>`;
+    tagsContainer.appendChild(tag);
+    novasDatas++;
+  });
+
   // Atualizar hidden
   const dates = Array.from(tagsContainer.querySelectorAll(".date-tag")).map(
     (el) => el.dataset.date,
   );
   hidden.value = dates.join(",");
-  input.value = "";
+  startInput.value = "";
+  endInput.value = "";
+
+  if (novasDatas === 0) {
+    showToast("Essas datas já estavam adicionadas", "warning");
+  } else if (novasDatas === 1) {
+    showToast("Data adicionada", "success");
+  } else {
+    showToast(`${novasDatas} datas adicionadas`, "success");
+  }
 };
 
 window.removeDateTag = function (el) {
@@ -696,6 +742,11 @@ async function loadPlaylists(container) {
                         <input type="time" id="endTime_${p.id}" class="rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-light">
                         <span class="text-xs text-gray">(vazio = sempre)</span>
                         <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray">Duração:</span>
+                            <input type="number" id="duration_${p.id}" min="1" value="10" style="width:4.5rem" class="rounded-xl border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-light">
+                            <span class="text-xs text-gray">seg</span>
+                        </div>
+                        <div class="flex items-center gap-2">
                             <span class="text-xs text-gray">Datas:</span>
                             ${dateSelectorHtml(`datesNew_${p.id}`)}
                             <span class="text-xs text-gray">(vazio = sempre)</span>
@@ -708,7 +759,7 @@ async function loadPlaylists(container) {
                             <div class="overflow-x-auto">
                                 <table class="playlist-items-table">
                                     <thead>
-                                        <tr><th>Ordem</th><th>Ficheiro</th><th>Pré‑vis.</th><th>Datas</th><th>Horário</th><th></th><th>Ações</th></tr>
+                                        <tr><th>Ordem</th><th>Ficheiro</th><th>Pré‑vis.</th><th>Datas</th><th>Horário</th><th>Duração</th><th></th><th>Ações</th></tr>
                                     </thead>
                                     <tbody>
                                         ${items
@@ -735,6 +786,10 @@ async function loadPlaylists(container) {
                                                         <span class="text-gray text-xs">até</span>
                                                         <input type="time" class="endtime-input rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-light" value="${item.end_time || ""}" data-item="${item.id}" data-playlist="${p.id}">
                                                         ${!item.start_time && !item.end_time ? '<div class="text-xs text-gray mt-0.5">(sempre)</div>' : ""}
+                                                    </td>
+                                                    <td class="py-2 px-3">
+                                                        <input type="number" min="1" class="duration-input rounded border border-gray-700 bg-gray-800 px-1 py-0.5 text-sm text-gray-light" style="width:4.5rem" value="${item.duration_seconds || 10}" data-item="${item.id}" data-playlist="${p.id}">
+                                                        <span class="text-gray text-xs">seg</span>
                                                     </td>
                                                     <td class="py-2 px-3">
                                                         <button class="update-horario btn btn-primary btn-sm" data-item="${item.id}" data-playlist="${p.id}">🔄</button>
@@ -798,8 +853,15 @@ async function loadPlaylists(container) {
         const mid = document.getElementById(`mediaSelect_${pid}`).value;
         const startTime = document.getElementById(`startTime_${pid}`).value;
         const endTime = document.getElementById(`endTime_${pid}`).value;
+        const durationInput = document.getElementById(`duration_${pid}`);
+        const duration = durationInput ? parseInt(durationInput.value, 10) : 10;
         const selectedDates = getSelectedDates(`datesNew_${pid}`);
         if (!mid) return showToast("Selecione um ficheiro", "warning");
+        if (!duration || duration < 1)
+          return showToast(
+            "Indique uma duração válida (em segundos)",
+            "warning",
+          );
         if ((startTime && !endTime) || (!startTime && endTime))
           return showToast(
             "Defina as duas horas ou deixe ambas vazias",
@@ -818,6 +880,7 @@ async function loadPlaylists(container) {
               start_time: startTime || null,
               end_time: endTime || null,
               selected_dates: selectedDates,
+              duration_seconds: duration,
             }),
           });
           showToast("Item adicionado", "success");
@@ -838,7 +901,16 @@ async function loadPlaylists(container) {
         const endTime = document.querySelector(
           `.endtime-input[data-item="${itemId}"]`,
         ).value;
+        const durationInput = document.querySelector(
+          `.duration-input[data-item="${itemId}"]`,
+        );
+        const duration = durationInput ? parseInt(durationInput.value, 10) : 10;
         const selectedDates = getSelectedDates(`datesItem_${itemId}`);
+        if (!duration || duration < 1)
+          return showToast(
+            "Indique uma duração válida (em segundos)",
+            "warning",
+          );
         if ((startTime && !endTime) || (!startTime && endTime))
           return showToast(
             "Defina as duas horas ou deixe ambas vazias",
@@ -856,6 +928,7 @@ async function loadPlaylists(container) {
               start_time: startTime || null,
               end_time: endTime || null,
               selected_dates: selectedDates,
+              duration_seconds: duration,
             }),
           });
           showToast("Dados atualizados!", "success");

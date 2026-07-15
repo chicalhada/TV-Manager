@@ -508,10 +508,40 @@ function reproduzirItem(item, onTerminar) {
     video.style.objectFit = "contain";
     video.style.background = "#000";
 
+    var duracaoTimerVideo = null;
+    var videoTerminado = false;
+
+    function finalizarVideo() {
+      if (videoTerminado) return;
+      videoTerminado = true;
+      if (duracaoTimerVideo) {
+        clearTimeout(duracaoTimerVideo);
+        duracaoTimerVideo = null;
+      }
+      elementoVideoAtual = null;
+      enviarNowPlaying(null);
+      onTerminar();
+    }
+
     video.onloadedmetadata = function () {
       console.log("📹 Vídeo carregado:", videoUrl);
       entrarFullscreen(video);
       enviarNowPlaying(item);
+
+      // Se houver uma duração configurada e ela for menor que a duração real
+      // do vídeo, corta a reprodução ao fim desse tempo.
+      var duracaoConfigurada = parseInt(item.duration_seconds, 10);
+      if (duracaoConfigurada && duracaoConfigurada > 0) {
+        var duracaoRealMs = isFinite(video.duration)
+          ? video.duration * 1000
+          : null;
+        if (!duracaoRealMs || duracaoConfigurada * 1000 < duracaoRealMs) {
+          duracaoTimerVideo = setTimeout(
+            finalizarVideo,
+            duracaoConfigurada * 1000,
+          );
+        }
+      }
     };
 
     video.oncanplay = function () {
@@ -521,14 +551,18 @@ function reproduzirItem(item, onTerminar) {
 
     video.onended = function () {
       console.log("⏹️ Vídeo terminou");
-      elementoVideoAtual = null;
-      enviarNowPlaying(null);
-      onTerminar();
+      finalizarVideo();
     };
 
     video.onerror = function (e) {
       console.error("❌ Erro no vídeo:", e);
       console.error("URL do vídeo:", videoUrl);
+      if (videoTerminado) return;
+      videoTerminado = true;
+      if (duracaoTimerVideo) {
+        clearTimeout(duracaoTimerVideo);
+        duracaoTimerVideo = null;
+      }
       elementoVideoAtual = null;
       enviarNowPlaying(null);
       setTimeout(onTerminar, 2000);

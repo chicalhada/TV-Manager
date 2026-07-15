@@ -47,15 +47,18 @@ body {
 }
 
 /* ===== HEADER ===== */
+.top-bar-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
 header {
   background: rgba(17, 24, 39, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding: 0.75rem 1.5rem;
-  position: sticky;
-  top: 0;
-  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -366,6 +369,7 @@ section {
 }
 .date-input-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.25rem;
   align-items: center;
 }
@@ -377,6 +381,7 @@ section {
   color: #e2e8f0;
   font-size: 0.8rem;
   flex: 1;
+  min-width: 8rem;
 }
 .date-input-row .add-date-btn {
   padding: 0.1rem 0.5rem;
@@ -831,9 +836,6 @@ section {
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding: 0.75rem 1.5rem;
-  position: sticky;
-  top: 0;
-  z-index: 20;
 }
 
 .dashboard-stats {

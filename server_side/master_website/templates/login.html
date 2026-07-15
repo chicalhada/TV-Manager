@@ -177,14 +177,12 @@
       </form>
 
       <div
+        id="registerSection"
         style="text-align: center; margin-top: 1.5rem"
-        class="register-section"
+        class="register-section hidden"
       >
         <span style="color: #9ca3af">Não tem conta?</span>
         <span id="showRegisterBtn" class="link">Criar conta</span>
-        <div id="registerDisabledMsg" class="register-disabled hidden">
-          Registo desativado (apenas o primeiro utilizador pode criar conta)
-        </div>
       </div>
 
       <div id="registerForm" class="register-form hidden">
@@ -268,10 +266,9 @@
         try {
           const res = await fetch(`${API_BASE}/auth/has-users`);
           const data = await res.json();
-          if (data.hasUsers) {
-            document.getElementById("showRegisterBtn").style.display = "none";
+          if (!data.hasUsers) {
             document
-              .getElementById("registerDisabledMsg")
+              .getElementById("registerSection")
               .classList.remove("hidden");
           }
         } catch (e) {}
@@ -369,6 +366,7 @@
 
       showRegisterBtn.addEventListener("click", () => {
         loginForm.style.display = "none";
+        document.getElementById("registerSection").style.display = "none";
         registerFormDiv.classList.remove("hidden");
         errorDiv.classList.add("hidden");
         registerMessage.classList.add("hidden");
@@ -376,6 +374,7 @@
 
       backToLoginBtn.addEventListener("click", () => {
         loginForm.style.display = "block";
+        document.getElementById("registerSection").style.display = "";
         registerFormDiv.classList.add("hidden");
         errorDiv.classList.add("hidden");
         registerMessage.classList.add("hidden");

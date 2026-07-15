@@ -294,6 +294,17 @@ def add_item_to_playlist(playlist_id):
     end_time = data.get("end_time") or None
     selected_dates = data.get("selected_dates")
 
+    duration_seconds = data.get("duration_seconds")
+    if duration_seconds in (None, ""):
+        duration_seconds = 10
+    else:
+        try:
+            duration_seconds = int(duration_seconds)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Duração inválida"}), 400
+        if duration_seconds < 1:
+            return jsonify({"error": "A duração tem de ser de pelo menos 1 segundo"}), 400
+
     if isinstance(selected_dates, list):
         selected_dates = ",".join(selected_dates)
     elif selected_dates is None:
@@ -313,7 +324,7 @@ def add_item_to_playlist(playlist_id):
 
     items = get_playlist_items(playlist_id, user_id)
     next_order = len(items) + 1
-    add_playlist_item(playlist_id, media_id, duration_seconds=10, display_order=next_order,
+    add_playlist_item(playlist_id, media_id, duration_seconds=duration_seconds, display_order=next_order,
                       start_time=start_time, end_time=end_time, selected_dates=selected_dates)
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 201
@@ -326,6 +337,17 @@ def update_playlist_item_route(playlist_id, item_id):
     start_time = data.get("start_time") or None
     end_time = data.get("end_time") or None
     selected_dates = data.get("selected_dates")
+
+    duration_seconds = data.get("duration_seconds")
+    if duration_seconds in (None, ""):
+        duration_seconds = 10
+    else:
+        try:
+            duration_seconds = int(duration_seconds)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Duração inválida"}), 400
+        if duration_seconds < 1:
+            return jsonify({"error": "A duração tem de ser de pelo menos 1 segundo"}), 400
 
     if isinstance(selected_dates, list):
         selected_dates = ",".join(selected_dates)
@@ -341,7 +363,7 @@ def update_playlist_item_route(playlist_id, item_id):
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
 
-    update_playlist_item(item_id, playlist_id, user_id, start_time, end_time, selected_dates)
+    update_playlist_item(item_id, playlist_id, user_id, start_time, end_time, selected_dates, duration_seconds)
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 

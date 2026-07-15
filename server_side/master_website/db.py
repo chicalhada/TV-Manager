@@ -279,15 +279,16 @@ def remove_playlist_item(item_id, playlist_id, user_id):
         conn.commit()
 
 def update_playlist_item(item_id, playlist_id, user_id,
-                         start_time=None, end_time=None, selected_dates=None):
+                         start_time=None, end_time=None, selected_dates=None,
+                         duration_seconds=None):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE playlist_items
-            SET start_time = ?, end_time = ?, selected_dates = ?
+            SET start_time = ?, end_time = ?, selected_dates = ?, duration_seconds = ?
             WHERE id = ? AND playlist_id = ?
             AND playlist_id IN (SELECT id FROM playlists WHERE user_id = ?)
-        """, (start_time, end_time, selected_dates, item_id, playlist_id, user_id))
+        """, (start_time, end_time, selected_dates, duration_seconds, item_id, playlist_id, user_id))
         conn.commit()
 
 def reorder_playlist_items(playlist_id, user_id, item_ids):
