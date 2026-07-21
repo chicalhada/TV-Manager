@@ -1,6 +1,85 @@
 /* ============================================================
    CSS COMPLETO - DESIGN MODERNO (SEM CONTROLES)
    ============================================================ */
+
+/* ============================================================
+   OVERLAY "TOQUE PARA INICIAR" (FULLSCREEN AUTOMÁTICO)
+   Aparece em primeiro plano quando a página carrega; ao primeiro
+   clique/tecla, pede-se o requestFullscreen no documentElement e
+   o overlay é removido.
+   ============================================================ */
+.start-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  background:
+    radial-gradient(ellipse at 25% 30%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 70%, rgba(139, 92, 246, 0.18) 0%, transparent 55%),
+    #020617;
+  animation: startOverlayFadeIn 0.4s ease-out;
+}
+.start-overlay-inner {
+  text-align: center;
+  color: #f1f5f9;
+  padding: 20px;
+  animation: startOverlayPulse 2.4s ease-in-out infinite;
+}
+.start-overlay .start-icon {
+  font-size: 6rem;
+  line-height: 1;
+  margin-bottom: 18px;
+  filter: drop-shadow(0 8px 30px rgba(99, 102, 241, 0.6));
+}
+.start-overlay .start-title {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #fde68a, #f59e0b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.start-overlay .start-text {
+  font-size: 1.15rem;
+  color: #cbd5e1;
+  font-weight: 500;
+}
+@keyframes startOverlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes startOverlayPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 18px rgba(99, 102, 241, 0.35));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 38px rgba(99, 102, 241, 0.6));
+    transform: scale(1.02);
+  }
+}
+@media (max-width: 480px) {
+  .start-overlay .start-icon {
+    font-size: 4rem;
+  }
+  .start-overlay .start-title {
+    font-size: 2rem;
+  }
+  .start-overlay .start-text {
+    font-size: 1rem;
+  }
+}
 * {
   margin: 0;
   padding: 0;

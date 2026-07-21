@@ -5,6 +5,9 @@ import os
 import uuid
 import bcrypt
 import jwt
+import zipfile
+import mimetypes
+import shutil
 from functools import wraps
 from datetime import datetime, timedelta, timezone
 from flask_socketio import SocketIO, emit, join_room
@@ -43,7 +46,11 @@ from db import (
     update_playlist_item,
     reorder_playlist_items,
     init_db,
-    item_valido_para_data
+    item_valido_para_data,
+    item_valido_para_tv,
+    add_history,
+    get_history,
+    update_media_category
 )
 
 app = Flask(__name__)
@@ -213,22 +220,117 @@ def upload_file():
     files = request.files.getlist('file')
     if not files or files[0].filename == '':
         return jsonify({"error": "Nenhum ficheiro selecionado"}), 400
+    category = request.form.get("category") or None
+    if category and len(category) > 50:
+        return jsonify({"error": "A categoria não pode ter mais de 50 caracteres"}), 400
     resultados = []
     for file in files:
         original_name = secure_filename(file.filename)
+        # Saltar ficheiros cujo nome seguro ficou vazio (ex.: só emojis/acentos).
+        if not original_name:
+            continue
         unique_id = str(uuid.uuid4())[:8]
         filename = f"{unique_id}_{original_name}"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         file.save(filepath)
         url = f"/uploads/{filename}"
         mime_type = file.mimetype
-        media_id = add_media(filename, url, mime_type, user_id)
+        media_id = add_media(filename, url, mime_type, user_id, original_name, category=category)
         resultados.append({
             "id": media_id,
-            "filename": filename,
-            "url": url
+            "filename": original_name,
+            "url": url,
+            "category": category
         })
     return jsonify(resultados), 201
+
+ZIP_ALLOWED_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+    '.mp4', '.webm', '.mov', '.avi', '.mkv'
+}
+ZIP_MAX_ENTRIES = 50                 # máximo de ficheiros por import
+ZIP_MAX_ENTRY_BYTES = 500 * 1024 * 1024   # 500 MB por entrada (generoso, anti-zip-bomb)
+ZIP_MAX_TOTAL_BYTES = 50 * 1024 * 1024    # 50 MB no total descomprimido (anti-zip-bomb)
+
+@app.route("/api/upload/zip", methods=["POST"])
+@login_required
+def upload_zip():
+    user_id = request.current_user["user_id"]
+    file = request.files.get('file')
+    if not file or file.filename == '':
+        return jsonify({"error": "Nenhum ficheiro ZIP selecionado"}), 400
+    if not file.filename.lower().endswith('.zip'):
+        return jsonify({"error": "O ficheiro tem de ser um .zip"}), 400
+
+    category = request.form.get("category") or None
+    if category and len(category) > 50:
+        return jsonify({"error": "A categoria não pode ter mais de 50 caracteres"}), 400
+    resultados = []
+    ignorados = []
+    bytes_escritos_total = 0
+    try:
+        with zipfile.ZipFile(file.stream) as zf:
+            infos = zf.infolist()
+            if len(infos) > ZIP_MAX_ENTRIES:
+                return jsonify({
+                    "error": f"O ZIP tem demasiadas entradas (máx. {ZIP_MAX_ENTRIES})"
+                }), 400
+            for info in infos:
+                if info.is_dir():
+                    continue
+                nome_original = os.path.basename(info.filename)
+                if not nome_original:
+                    continue
+                ext = os.path.splitext(nome_original)[1].lower()
+                if ext not in ZIP_ALLOWED_EXTENSIONS:
+                    ignorados.append(nome_original)
+                    continue
+                # Limit por entrada (metadata) antes de extrair.
+                if info.file_size > ZIP_MAX_ENTRY_BYTES:
+                    ignorados.append(nome_original)
+                    continue
+                # Limit acumulado (anti-zip-bomb).
+                if bytes_escritos_total + info.file_size > ZIP_MAX_TOTAL_BYTES:
+                    return jsonify({
+                        "error": "O conteúdo descomprimido excede o limite permitido"
+                    }), 400
+                original_name = secure_filename(nome_original)
+                # Se secure_filename retornar vazio (ex.: nome só com emojis),
+                # saltar em vez de gravar um ficheiro sem nome/extensão inutilizável.
+                if not original_name:
+                    ignorados.append(nome_original)
+                    continue
+                unique_id = str(uuid.uuid4())[:8]
+                filename = f"{unique_id}_{original_name}"
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                # Streaming para o disco (não carrega o ficheiro inteiro em memória).
+                with zf.open(info) as source, open(filepath, 'wb') as target:
+                    shutil.copyfileobj(source, target, length=64 * 1024)
+                # Defesa pós-escrita: validar tamanho real, já que o metadata do zip
+                # pode ser mentiroso. Se exceder o limite, apagar o ficheiro.
+                tamanho_real = os.path.getsize(filepath)
+                if tamanho_real > ZIP_MAX_ENTRY_BYTES:
+                    os.remove(filepath)
+                    ignorados.append(nome_original)
+                    continue
+                if bytes_escritos_total + tamanho_real > ZIP_MAX_TOTAL_BYTES:
+                    # Cap total excedido: descartar este ficheiro e continuar a analisar o resto,
+                    # em vez de abortar e deixar ficheiros já importados em estado parcial.
+                    os.remove(filepath)
+                    ignorados.append(nome_original)
+                    continue
+                bytes_escritos_total += tamanho_real
+                mime_type = mimetypes.guess_type(nome_original)[0] or 'application/octet-stream'
+                url = f"/uploads/{filename}"
+                media_id = add_media(filename, url, mime_type, user_id, original_name, category=category)
+                resultados.append({"id": media_id, "filename": original_name, "url": url, "category": category})
+    except zipfile.BadZipFile:
+        return jsonify({"error": "Ficheiro ZIP inválido"}), 400
+
+    if not resultados and not ignorados:
+        return jsonify({"error": "O ZIP está vazio"}), 400
+
+    return jsonify({"success": True, "imported": resultados, "ignored": ignorados}), 201
 
 @app.route("/api/media/<int:media_id>", methods=["DELETE"])
 @login_required
@@ -244,6 +346,25 @@ def delete_media_route(media_id):
         os.remove(filepath)
     delete_media(media_id, user_id)
     return jsonify({"success": True, "message": "Media removido"}), 200
+
+@app.route("/api/media/<int:media_id>", methods=["PUT"])
+@login_required
+def update_media_route(media_id):
+    user_id = request.current_user["user_id"]
+    data = request.get_json() or {}
+    category = data.get("category")
+    # Categorias vazias são normalizadas para None (sem categoria).
+    if category is not None:
+        category = category.strip() or None
+        if category and len(category) > 50:
+            return jsonify({"error": "A categoria não pode ter mais de 50 caracteres"}), 400
+    media = get_media(media_id)
+    if not media:
+        return jsonify({"error": "Media não encontrado"}), 404
+    if media['user_id'] != user_id:
+        return jsonify({"error": "Não autorizado"}), 403
+    update_media_category(media_id, user_id, category)
+    return jsonify({"success": True, "category": category}), 200
 
 @app.route("/api/playlists", methods=["GET"])
 @login_required
@@ -293,10 +414,14 @@ def add_item_to_playlist(playlist_id):
     start_time = data.get("start_time") or None
     end_time = data.get("end_time") or None
     selected_dates = data.get("selected_dates")
+    tv_ids = data.get("tv_ids")
 
     duration_seconds = data.get("duration_seconds")
+    # Só normalizamos e validamos duration_seconds quando o cliente o envia
+    # explicitamente. Caso contrário passamos None para preservar o valor
+    # existente (a schema tem DEFAULT 10 e a função DB aceita None -> 10).
     if duration_seconds in (None, ""):
-        duration_seconds = 10
+        duration_seconds = None
     else:
         try:
             duration_seconds = int(duration_seconds)
@@ -322,10 +447,21 @@ def add_item_to_playlist(playlist_id):
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
 
+    if tv_ids is not None:
+        if not isinstance(tv_ids, list):
+            return jsonify({"error": "tv_ids deve ser uma lista"}), 400
+        try:
+            tv_ids = [int(t) for t in tv_ids]
+        except (TypeError, ValueError):
+            return jsonify({"error": "tv_ids inválido"}), 400
+        tvs_do_user = {tv["id"] for tv in list_child_sites(user_id)}
+        if any(t not in tvs_do_user for t in tv_ids):
+            return jsonify({"error": "Uma ou mais TVs não são válidas"}), 400
+
     items = get_playlist_items(playlist_id, user_id)
     next_order = len(items) + 1
     add_playlist_item(playlist_id, media_id, duration_seconds=duration_seconds, display_order=next_order,
-                      start_time=start_time, end_time=end_time, selected_dates=selected_dates)
+                      start_time=start_time, end_time=end_time, selected_dates=selected_dates, tv_ids=tv_ids)
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 201
 
@@ -337,10 +473,14 @@ def update_playlist_item_route(playlist_id, item_id):
     start_time = data.get("start_time") or None
     end_time = data.get("end_time") or None
     selected_dates = data.get("selected_dates")
+    tv_ids = data.get("tv_ids")
 
     duration_seconds = data.get("duration_seconds")
+    # Só normalizamos e validamos duration_seconds quando o cliente o envia
+    # explicitamente. Caso contrário passamos None para preservar o valor
+    # existente (a schema tem DEFAULT 10 e a função DB aceita None -> 10).
     if duration_seconds in (None, ""):
-        duration_seconds = 10
+        duration_seconds = None
     else:
         try:
             duration_seconds = int(duration_seconds)
@@ -363,7 +503,18 @@ def update_playlist_item_route(playlist_id, item_id):
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
 
-    update_playlist_item(item_id, playlist_id, user_id, start_time, end_time, selected_dates, duration_seconds)
+    if tv_ids is not None:
+        if not isinstance(tv_ids, list):
+            return jsonify({"error": "tv_ids deve ser uma lista"}), 400
+        try:
+            tv_ids = [int(t) for t in tv_ids]
+        except (TypeError, ValueError):
+            return jsonify({"error": "tv_ids inválido"}), 400
+        tvs_do_user = {tv["id"] for tv in list_child_sites(user_id)}
+        if any(t not in tvs_do_user for t in tv_ids):
+            return jsonify({"error": "Uma ou mais TVs não são válidas"}), 400
+
+    update_playlist_item(item_id, playlist_id, user_id, start_time, end_time, selected_dates, duration_seconds, tv_ids=tv_ids)
     playlist_atualizada = get_playlist_items(playlist_id, user_id)
     return jsonify({"id": playlist_id, "items": playlist_atualizada}), 200
 
@@ -433,7 +584,7 @@ def get_assignments():
             })
     return jsonify(result)
 
-# ========== Agendamentos com selected_dates ==========
+# ========== Agendamentos (apenas datas específicas) ==========
 @app.route("/api/schedule", methods=["GET"])
 @login_required
 def get_schedules():
@@ -448,7 +599,6 @@ def create_schedule():
     data = request.get_json()
     child_site_codigo = data.get("child_site_codigo")
     playlist_id = data.get("playlist_id")
-    day_of_week = data.get("day_of_week")
     start_time = data.get("start_time")
     end_time = data.get("end_time")
     active = data.get("active", 1)
@@ -464,8 +614,8 @@ def create_schedule():
     if not child_site_codigo or not playlist_id or not start_time:
         return jsonify({"error": "child_site_codigo, playlist_id e start_time são obrigatórios"}), 400
 
-    if not day_of_week and not selected_dates:
-        return jsonify({"error": "Indique o dia da semana ou uma lista de datas"}), 400
+    if not selected_dates:
+        return jsonify({"error": "Indique pelo menos uma data"}), 400
 
     child_site = get_child_site_by_codigo(child_site_codigo)
     if not child_site:
@@ -477,7 +627,7 @@ def create_schedule():
     if not playlist or playlist['user_id'] != user_id:
         return jsonify({"error": "Playlist não encontrada"}), 404
 
-    schedule_id = add_schedule(child_site["id"], playlist_id, day_of_week, start_time, end_time, active, selected_dates)
+    schedule_id = add_schedule(child_site["id"], playlist_id, start_time, end_time, active, selected_dates)
     return jsonify({"success": True, "schedule_id": schedule_id}), 201
 
 @app.route("/api/schedule/<int:schedule_id>", methods=["PUT"])
@@ -492,7 +642,6 @@ def update_schedule_route(schedule_id):
 
     child_site_codigo = data.get("child_site_codigo")
     playlist_id = data.get("playlist_id")
-    day_of_week = data.get("day_of_week")
     start_time = data.get("start_time")
     end_time = data.get("end_time")
     active = data.get("active")
@@ -523,7 +672,6 @@ def update_schedule_route(schedule_id):
         schedule_id,
         child_site_id=child_site_id,
         playlist_id=playlist_id,
-        day_of_week=day_of_week,
         start_time=start_time,
         end_time=end_time,
         active=active,
@@ -554,7 +702,6 @@ def get_child_playlist(child_site_codigo):
 
     scheduled_playlist = get_active_playlist_for_tv(
         child_site["id"],
-        now.strftime("%a").upper(),
         current_time,
         current_date
     )
@@ -578,6 +725,9 @@ def get_child_playlist(child_site_codigo):
                     continue
         # Verificar datas selecionadas
         if not item_valido_para_data(item, current_date):
+            continue
+        # Verificar se este item está atribuído a esta TV em concreto
+        if not item_valido_para_tv(item, child_site["id"]):
             continue
         filtered_items.append(item)
 
@@ -682,6 +832,20 @@ def delete_user(user_id):
     db_delete_user(user_id)
     return jsonify({'message': 'removido'}), 200
 
+# ========== Histórico de reprodução ==========
+HISTORY_MAX_LIMIT = 1000  # teto para evitar dump completo da tabela
+
+@app.route('/api/history', methods=['GET'])
+@login_required
+def get_history_route():
+    user_id = request.current_user["user_id"]
+    child_site_id = request.args.get("tv_id", type=int)
+    # Limitar o teto do LIMIT para impedir dump da tabela.
+    raw_limit = request.args.get("limit", type=int) or 300
+    limit = max(1, min(raw_limit, HISTORY_MAX_LIMIT))
+    history = get_history(user_id, child_site_id, limit)
+    return jsonify(history)
+
 # ========== WebSocket ==========
 @socketio.on('connect')
 def handle_connect():
@@ -710,10 +874,21 @@ def handle_now_playing(data):
     codigo = data.get('codigo')
     if not codigo:
         return
+    item_name = data.get('item_name')
+    tipo = data.get('tipo')
+    url = data.get('url')
+
+    anterior = now_playing_by_tv.get(codigo)
+    mudou = not anterior or anterior.get('item_name') != item_name or anterior.get('url') != url
+    if item_name and mudou:
+        child_site = get_child_site_by_codigo(codigo)
+        if child_site:
+            add_history(child_site["id"], item_name, tipo, url)
+
     now_playing_by_tv[codigo] = {
-        'item_name': data.get('item_name'),
-        'tipo': data.get('tipo'),
-        'url': data.get('url'),
+        'item_name': item_name,
+        'tipo': tipo,
+        'url': url,
         'updated_at': datetime.now().isoformat()
     }
 

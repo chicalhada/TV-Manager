@@ -1,5 +1,5 @@
 -- ============================================================
--- TV Manager – Esquema da Base de Dados (versão com datas múltiplas)
+-- TV Manager – Esquema da Base de Dados (agendamentos só por datas)
 -- ============================================================
 
 -- Tabela de utilizadores (administradores)
@@ -63,15 +63,14 @@ CREATE TABLE IF NOT EXISTS tv_playlist_assignments (
     FOREIGN KEY (playlist_id) REFERENCES playlists (id)
 );
 
--- Tabela de agendamentos (playlists programadas por dia da semana OU datas específicas)
+-- Tabela de agendamentos (playlists programadas por datas específicas)
 CREATE TABLE IF NOT EXISTS schedule (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     child_site_id INTEGER NOT NULL,
     playlist_id INTEGER NOT NULL,
-    day_of_week TEXT,          -- MON, TUE, ... (opcional)
-    selected_dates TEXT,       -- lista de datas específicas (opcional)
-    start_time TEXT NOT NULL,  -- formato HH:MM
-    end_time TEXT,             -- formato HH:MM (opcional)
+    selected_dates TEXT NOT NULL,  -- lista de datas específicas, obrigatória
+    start_time TEXT NOT NULL,      -- formato HH:MM
+    end_time TEXT,                 -- formato HH:MM (opcional)
     active INTEGER DEFAULT 1,
     FOREIGN KEY (child_site_id) REFERENCES child_sites (id),
     FOREIGN KEY (playlist_id) REFERENCES playlists (id)

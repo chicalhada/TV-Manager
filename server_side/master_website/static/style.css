@@ -342,30 +342,38 @@ section {
   min-width: 180px;
 }
 .date-tags-container {
+  max-height: 80px;
+  overflow-y: auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  min-height: 2rem;
+  gap: 4px;
+  padding: 2px 0;
+  scrollbar-width: thin;
+}
+.date-tags-container::-webkit-scrollbar {
+  width: 4px;
+}
+.date-tags-container::-webkit-scrollbar-thumb {
+  background: #4f46e5;
+  border-radius: 8px;
 }
 .date-tag {
-  background: rgba(99, 102, 241, 0.2);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  border-radius: 9999px;
-  padding: 0.1rem 0.5rem;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 20px;
   color: #a5b4fc;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 4px;
+  white-space: nowrap;
 }
 .date-tag .remove-date {
-  cursor: pointer;
+  font-size: 0.6rem;
   color: #f87171;
-  font-weight: bold;
-  margin-left: 0.1rem;
-}
-.date-tag .remove-date:hover {
-  color: #ef4444;
+  cursor: pointer;
+  margin-left: 2px;
 }
 .date-input-row {
   display: flex;
@@ -869,64 +877,200 @@ section {
   color: #fff;
 }
 
-/* ===== RESPONSIVIDADE ===== */
-@media (max-width: 640px) {
-  .px-6 {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-  .py-10 {
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
-  }
-  .section-title {
-    font-size: 1.5rem;
-  }
-  .card .value {
-    font-size: 1.6rem;
-  }
-  .table-container td,
-  .table-container th {
-    padding: 0.6rem 0.5rem;
-    font-size: 0.8rem;
-  }
-  .playlist-add-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .playlist-items-table {
-    font-size: 0.75rem;
-  }
-  .playlist-items-table th,
-  .playlist-items-table td {
-    padding: 0.3rem 0.3rem;
-  }
-  .thumbnail-video,
-  .thumbnail-image,
-  .thumbnail-placeholder {
-    width: 3.5rem;
-    height: 2.5rem;
-  }
-  .dashboard-stats {
-    gap: 1rem;
-    justify-content: space-around;
-  }
-  .stat-item .stat-value {
-    font-size: 1.1rem;
-  }
-  .stat-item .stat-label {
-    font-size: 0.65rem;
-  }
-  .dias-select {
-    min-width: 4rem;
-    font-size: 0.7rem;
-    size: 3;
-  }
-  .date-selector {
-    min-width: 120px;
-  }
-  .modal {
-    padding: 1rem;
-    max-width: 95vw;
-  }
+/* ===== WIDGET DE HISTÓRICO (removido, mas mantido para compatibilidade) ===== */
+.history-widget {
+  display: none !important;
+}
+#historySection {
+  display: none !important;
+}
+
+/* ===== MODAL DE HISTÓRICO (adicional) ===== */
+.history-modal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.history-modal-filters label {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.history-modal-filters select,
+.history-modal-filters input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px 10px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+}
+.history-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.history-modal-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.history-modal-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+}
+.history-modal-table tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.history-modal-empty {
+  color: #64748b;
+  text-align: center;
+  padding: 30px 0;
+}
+
+/* ===== FLASH VISUAL QUANDO UM ITEM É GUARDADO AUTOMATICAMENTE ===== */
+.playlist-items-table tr.row-saved td {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  transition: background-color 0.4s ease;
+}
+.playlist-items-table tr.row-saved-fading td {
+  background-color: transparent !important;
+  transition: background-color 1.2s ease;
+}
+
+/* ===== CATEGORIA DE FICHEIROS ===== */
+.category-select {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  min-width: 8.5rem;
+  max-width: 12rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.category-select:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+.category-select.category-saved {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+}
+.category-select option {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+.category-custom-input {
+  display: block;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  outline: none;
+}
+.category-custom-input:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+.upload-category-select {
+  min-width: 9rem;
+}
+
+/* ===== CHECKBOX DE TVs (estilo já existente, mas reforçado) ===== */
+.tv-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  min-width: 140px;
+  max-height: 6.5rem;
+  overflow-y: auto;
+}
+.tv-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tv-checkbox-item input[type="checkbox"] {
+  accent-color: #6366f1;
+  width: 0.9rem;
+  height: 0.9rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ===== MODAL DE HISTÓRICO (já existente) ===== */
+.history-modal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.history-modal-filters label {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.history-modal-filters select,
+.history-modal-filters input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 4px 10px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+}
+.history-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.history-modal-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.history-modal-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+}
+.history-modal-table tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.history-modal-empty {
+  color: #64748b;
+  text-align: center;
+  padding: 30px 0;
 }

@@ -1,5 +1,6 @@
 // ============================================================
 // JAVASCRIPT COMPLETO - SEM CONTROLES - FULLSCREEN AUTOMÁTICO
+// (Ativado por clique único do utilizador; depois de F11 = autoplay)
 // ============================================================
 
 var SERVER_HOST = window.location.hostname;
@@ -50,6 +51,15 @@ var estaEmFullscreen = false;
 var fullscreenContainer = null;
 var playerAtivo = false;
 var iniciadoAutomaticamente = false;
+
+// O requestFullscreen exige um gesto do utilizador. Sem --kiosk não é
+// possível entrar em ecrã cheio sem pelo menos um clique, por isso
+// mostramos um overlay “toque para começar” e, ao primeiro gesto, pedimos
+// `requestFullscreen` no documentElement e removemos o overlay. Estando
+// em ecrã cheio, o resto do fluxo (autoplay, loop, F11 mantido ao longo
+// da sessão) decorre sem novas intervenções.
+var iniciadoPorClique = false;
+var gestoListenersAdicionados = false;
 
 // ============================================================
 // 2. ID FIXO DO DISPOSITIVO
@@ -204,7 +214,7 @@ function enviarNowPlaying(item) {
       tipo = "imagem";
     socket.emit("now_playing", {
       codigo: CODIGO_TV,
-      item_name: item.name || "Desconhecido",
+      item_name: item.original_name || item.filename || "",
       tipo: tipo,
       url: item.url || "",
     });
@@ -274,6 +284,96 @@ function voltarTelaInicial() {
 }
 
 // ============================================================
+// 6.5. OVERLAY "TOQUE PARA INICIAR" + F11 AUTOMÁTICO POR GESTO
+// ============================================================
+function mostrarPromptIniciar() {
+  if (document.getElementById("iniciarOverlay")) return;
+  var overlay = document.createElement("div");
+  overlay.id = "iniciarOverlay";
+  overlay.className = "start-overlay";
+  overlay.innerHTML =
+    '<div class="start-overlay-inner">' +
+    '<div class="start-icon">📺</div>' +
+    '<div class="start-title">TV Manager</div>' +
+    '<div class="start-text">Toque ou clique para iniciar em ecrã cheio</div>' +
+    "</div>";
+  document.body.appendChild(overlay);
+}
+
+function removerPromptIniciar() {
+  var overlay = document.getElementById("iniciarOverlay");
+  if (overlay) overlay.remove();
+}
+
+function tentarEntrarFullscreenEl(el) {
+  try {
+    if (el.requestFullscreen) {
+      return el.requestFullscreen({ navigationUI: "hide" });
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    } else if (el.mozRequestFullScreen) {
+      el.mozRequestFullScreen();
+    } else if (el.msRequestFullscreen) {
+      el.msRequestFullscreen();
+    }
+  } catch (e) {
+    console.warn("⚠️ Erro a pedir fullscreen:", e);
+  }
+  return null;
+}
+
+function iniciarPorClique() {
+  // Torna-se idempotente: o utilizador pode clicar várias vezes (e.g.
+  // depois de sair com Esc). Apenas saltamos se já estamos efetivamente
+  // em fullscreen — caso contrário pedimos novamente e deixamos remover
+  // o overlay.
+  var jaFullscreen = !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+  removerPromptIniciar();
+  if (jaFullscreen) {
+    iniciadoPorClique = true;
+    // Garante que o player arranca se a playlist já chegou entretanto.
+    if (itemsPlaylist && itemsPlaylist.length > 0 && !playerAtivo) {
+      ativarPlayer();
+    }
+    return;
+  }
+
+  iniciadoPorClique = true;
+  var el = document.documentElement;
+  var p = tentarEntrarFullscreenEl(el);
+  // Em browsers modernos, requestFullscreen devolve uma Promise que pode
+  // ser rejeitada (e.g. num iframe sem allow="fullscreen"). Tratamos o erro
+  // silenciosamente e continuamos em modo janela, mas o utilizador já
+  // concedeu o gesto, por isso o autoplay subsequente fica desbloqueado.
+  if (p && typeof p.then === "function") {
+    p.then(function () {
+      estaEmFullscreen = true;
+    }).catch(function (err) {
+      console.warn("⚠️ Fullscreen negado pelo browser:", err);
+    });
+  }
+
+  // Se a playlist já tinha chegado antes do clique, arrancar já.
+  if (itemsPlaylist && itemsPlaylist.length > 0 && !playerAtivo) {
+    ativarPlayer();
+  }
+}
+
+function instalarGestoInicial() {
+  if (gestoListenersAdicionados) return;
+  gestoListenersAdicionados = true;
+  var opts = { passive: true };
+  document.addEventListener("click", iniciarPorClique, opts);
+  document.addEventListener("touchstart", iniciarPorClique, opts);
+  document.addEventListener("keydown", iniciarPorClique, opts);
+}
+
+// ============================================================
 // 7. FULLSCREEN AUTOMÁTICO (F11) - SEM CONTROLES
 // ============================================================
 function entrarFullscreen(elemento) {
@@ -321,19 +421,12 @@ function entrarFullscreen(elemento) {
     tryPlayVideo(video, container);
   }
 
+  // O fullscreen já é tratado a nível do documentElement (ver
+  // iniciarPorClique), portanto NÃO pedimos requestFullscreen aqui —
+  // isso causaria uma transição “aninhada” mal suportada pela maioria
+  // dos browsers. Limitamo-nos a registar o container ativo e a
+  // mostrar o conteúdo lá dentro.
   if (!estaEmFullscreen) {
-    var elem = container;
-
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen({ navigationUI: "hide" }).catch(function () {});
-    } else if (elem.webkitRequestFullscreen) {
-      elem.webkitRequestFullscreen();
-    } else if (elem.msRequestFullscreen) {
-      elem.msRequestFullscreen();
-    } else if (elem.mozRequestFullScreen) {
-      elem.mozRequestFullScreen();
-    }
-
     estaEmFullscreen = true;
     fullscreenContainer = container;
   }
@@ -695,9 +788,15 @@ function renderizarUI(playlist, statusMensagem) {
             </div>
             ${
               temPlaylist
-                ? `
+                ? iniciadoPorClique
+                  ? `
                 <div class="autoplay-status">
                     <i class="fas fa-spinner fa-spin"></i> A iniciar automaticamente...
+                </div>
+            `
+                  : `
+                <div class="autoplay-status">
+                    <i class="fas fa-hand-pointer"></i> Toque em qualquer ponto do ecrã para iniciar em ecrã cheio
                 </div>
             `
                 : `
@@ -712,12 +811,18 @@ function renderizarUI(playlist, statusMensagem) {
         </div>
     `;
 
-  if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente) {
+  if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente && iniciadoPorClique) {
     iniciadoAutomaticamente = true;
     console.log("🚀 Iniciando reprodução automática em 2 segundos...");
     setTimeout(function () {
       ativarPlayer();
     }, 2000);
+  } else if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente && !iniciadoPorClique) {
+    iniciadoAutomaticamente = true;
+    // Pré-carregamos os itens mas só arrancamos com a reprodução depois
+    // do gesto (clique/tecla) — caso contrário o autoplay seria
+    // bloqueado pelos browsers modernos.
+    console.log("ℹ️ Playlist disponível. Aguardando gesto do utilizador para F11 + autoplay...");
   }
 }
 
@@ -771,40 +876,45 @@ async function atualizarPlaylist() {
 
   await atualizarPlaylist();
 
-  document.addEventListener("fullscreenchange", function () {
-    if (!document.fullscreenElement && estaEmFullscreen) {
-      estaEmFullscreen = false;
+  // Reação à saída de fullscreen (Esc, alt-tab, etc.): voltar a apresentar
+  // o overlay para que o utilizador re-entre em ecrã cheio com um único
+  // clique, mantendo o resto do comportamento automático na próxima
+  // interação.
+  function reagirMudancaFullscreen() {
+    var emFullscreen = !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+    estaEmFullscreen = emFullscreen;
+    if (!emFullscreen) {
       fullscreenContainer = null;
+      if (iniciadoPorClique) {
+        mostrarPromptIniciar();
+        instalarGestoInicial();
+      }
     }
-  });
-  document.addEventListener("webkitfullscreenchange", function () {
-    if (!document.webkitFullscreenElement && estaEmFullscreen) {
-      estaEmFullscreen = false;
-      fullscreenContainer = null;
-    }
-  });
-  document.addEventListener("msfullscreenchange", function () {
-    if (!document.msFullscreenElement && estaEmFullscreen) {
-      estaEmFullscreen = false;
-      fullscreenContainer = null;
-    }
-  });
-  document.addEventListener("mozfullscreenchange", function () {
-    if (!document.mozFullScreenElement && estaEmFullscreen) {
-      estaEmFullscreen = false;
-      fullscreenContainer = null;
-    }
-  });
+  }
+  document.addEventListener("fullscreenchange", reagirMudancaFullscreen, false);
+  document.addEventListener("webkitfullscreenchange", reagirMudancaFullscreen, false);
+  document.addEventListener("mozfullscreenchange", reagirMudancaFullscreen, false);
+  document.addEventListener("MSFullscreenChange", reagirMudancaFullscreen, false);
 
   if (intervaloPolling) clearInterval(intervaloPolling);
   intervaloPolling = setInterval(atualizarPlaylist, 30000);
+
+  // Os browsers exigem um gesto do utilizador em cada sessão para entrar
+  // em fullscreen, por isso mostramos sempre o overlay no arranque.
+  mostrarPromptIniciar();
+  instalarGestoInicial();
 
   console.log("✅ TV Manager inicializado com sucesso!");
   console.log(
     "🎯 AUTOPLAY TOTAL - Iniciará automaticamente quando a playlist estiver disponível",
   );
   console.log(
-    "🖥️ FULLSCREEN AUTOMÁTICO (F11) - Ativado quando a reprodução começar",
+    "🖥️ FULLSCREEN AUTOMÁTICO (F11) - Ativado no primeiro clique, mantém-se até sair com Esc",
   );
   console.log("🌐 Compatível com Chrome, Firefox, Edge, Safari e Opera");
 })();
