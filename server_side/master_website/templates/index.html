@@ -7,52 +7,51 @@
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <header>
-      <h1><span>📺</span> TV Manager</h1>
-      <div class="flex items-center gap-4">
-        <nav class="hidden md:flex items-center gap-1 text-sm">
-          <a href="#tvsSection">Televisões</a>
-          <a href="#mediaSection">Ficheiros</a>
-          <a href="#playlistsSection">Playlists</a>
-          <a href="#scheduleSection">Agendamentos</a>
-        </nav>
-        <div class="user-info">
-          <div class="user-avatar"><span id="userInitial">A</span></div>
-          <span id="userName" class="user-name">Admin</span>
-          <button id="logoutBtn" class="logout-btn" title="Sair">🚪</button>
+    <div id="topBar" class="top-bar-wrapper">
+      <header>
+        <h1><span>📺</span> TV Manager</h1>
+        <div class="flex items-center gap-4">
+          <nav class="hidden md:flex items-center gap-1 text-sm">
+            <a href="#tvsSection">📺 Televisões</a>
+            <a href="#mediaSection">🖼️ Ficheiros</a>
+            <a href="#playlistsSection">📋 Playlists</a>
+            <a href="#scheduleSection">📅 Agendamentos</a>
+          </nav>
+          <!-- Widget de histórico removido -->
+          <div class="user-info">
+            <div class="user-avatar"><span id="userInitial">A</span></div>
+            <span id="userName" class="user-name">Admin</span>
+            <button id="logoutBtn" class="logout-btn" title="Sair">🚪</button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
 
-    <!-- BARRA DE ESTATÍSTICAS (Dashboard) -->
-    <div id="dashboardBar" class="dashboard-bar">
-      <div id="dashboardContainer" class="dashboard-stats">
-        <!-- Carregado via JS -->
+      <!-- BARRA DE ESTATÍSTICAS (Dashboard) -->
+      <div id="dashboardBar" class="dashboard-bar">
+        <div id="dashboardContainer" class="dashboard-stats">
+          <!-- Carregado via JS -->
+        </div>
       </div>
     </div>
 
     <main class="max-w-7xl mx-auto px-6 py-10 space-y-12">
       <section id="tvsSection" class="scroll-mt-24">
-        <div class="section-title"><span class="icon">📺</span> Televisões</div>
         <div id="tvsContainer">Carregando...</div>
       </section>
 
       <section id="mediaSection" class="scroll-mt-24">
-        <div class="section-title"><span class="icon">🖼️</span> Ficheiros</div>
         <div id="mediaContainer">Carregando...</div>
       </section>
 
       <section id="playlistsSection" class="scroll-mt-24">
-        <div class="section-title"><span class="icon">📋</span> Playlists</div>
         <div id="playlistsContainer">Carregando...</div>
       </section>
 
       <section id="scheduleSection" class="scroll-mt-24">
-        <div class="section-title">
-          <span class="icon">📅</span> Agendamentos
-        </div>
         <div id="scheduleContainer">Carregando...</div>
       </section>
+
+      <!-- Secção de histórico removida -->
     </main>
 
     <!-- MODAL -->

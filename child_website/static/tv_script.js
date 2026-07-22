@@ -1,14 +1,13 @@
 // ============================================================
-// JAVASCRIPT COMPLETO - CORRIGIDO (com IP dinâmico)
+// JAVASCRIPT COMPLETO - SEM CONTROLES - FULLSCREEN AUTOMÁTICO
+// (Ativado por clique único do utilizador; depois de F11 = autoplay)
 // ============================================================
 
-// Em vez de fixar 127.0.0.1, usa o endereço do servidor que serviu a página.
-// Assim, a TV descobre automaticamente o IP do servidor.
-var SERVER_HOST = window.location.hostname; // ex: 192.168.13.56
+var SERVER_HOST = window.location.hostname;
 var API_BASE = "http://" + SERVER_HOST + ":5000";
 
 // ============================================================
-// WEBSOCKET (com fallback) – também dinâmico
+// WEBSOCKET (com fallback)
 // ============================================================
 var socket = null;
 try {
@@ -50,9 +49,17 @@ var temporizadorAtual = null;
 var elementoVideoAtual = null;
 var estaEmFullscreen = false;
 var fullscreenContainer = null;
-var temporizadorMouse = null;
 var playerAtivo = false;
 var iniciadoAutomaticamente = false;
+
+// O requestFullscreen exige um gesto do utilizador. Sem --kiosk não é
+// possível entrar em ecrã cheio sem pelo menos um clique, por isso
+// mostramos um overlay “toque para começar” e, ao primeiro gesto, pedimos
+// `requestFullscreen` no documentElement e removemos o overlay. Estando
+// em ecrã cheio, o resto do fluxo (autoplay, loop, F11 mantido ao longo
+// da sessão) decorre sem novas intervenções.
+var iniciadoPorClique = false;
+var gestoListenersAdicionados = false;
 
 // ============================================================
 // 2. ID FIXO DO DISPOSITIVO
@@ -135,11 +142,7 @@ async function obterOuCriarCodigo() {
     var response = await fetch(API_BASE + "/api/child/" + codigo + "/playlist");
     if (response.status === 404) {
       console.log("⚠️ Código não encontrado, registando...");
-      await fetch(API_BASE + "/api/tv/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo: codigo, device_id: deviceId }),
-      });
+      // Vai registar-se na função registarTV()
     }
   } catch (error) {
     console.warn("⚠️ Erro ao verificar código:", error);
@@ -148,6 +151,9 @@ async function obterOuCriarCodigo() {
   return codigo;
 }
 
+// ============================================================
+// FUNÇÃO REGISTAR TV CORRIGIDA (usa /api/tvs)
+// ============================================================
 async function registarTV() {
   try {
     if (socket) {
@@ -155,11 +161,22 @@ async function registarTV() {
     }
     var deviceId = obterIdDispositivo();
     var codigo = localStorage.getItem("tv_codigo") || CODIGO_TV;
-    var response = await fetch(API_BASE + "/api/tv/register", {
+    var response = await fetch(API_BASE + "/api/tvs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo: codigo, device_id: deviceId }),
+      body: JSON.stringify({
+        name: "TV-" + codigo,
+        codigo: codigo,
+        ip: null,
+      }),
     });
+    if (response.status === 409) {
+      console.log("ℹ️ TV já registada.");
+      return { status: "already_registered" };
+    }
+    if (!response.ok) {
+      throw new Error("Erro " + response.status);
+    }
     return await response.json();
   } catch (error) {
     console.error("❌ Erro ao registar TV:", error);
@@ -186,7 +203,33 @@ async function buscarPlaylist() {
 }
 
 // ============================================================
-// 5. PLAYER - INÍCIO AUTOMÁTICO
+// 5. ENVIAR ESTADO "A REPRODUZIR AGORA" PARA O SERVIDOR
+// ============================================================
+function enviarNowPlaying(item) {
+  if (!CODIGO_TV || !socket) return;
+  if (item) {
+    var tipo = "desconhecido";
+    if (item.mime_type && item.mime_type.startsWith("video/")) tipo = "video";
+    else if (item.mime_type && item.mime_type.startsWith("image/"))
+      tipo = "imagem";
+    socket.emit("now_playing", {
+      codigo: CODIGO_TV,
+      item_name: item.original_name || item.filename || "",
+      tipo: tipo,
+      url: item.url || "",
+    });
+  } else {
+    socket.emit("now_playing", {
+      codigo: CODIGO_TV,
+      item_name: null,
+      tipo: null,
+      url: null,
+    });
+  }
+}
+
+// ============================================================
+// 6. PLAYER - INÍCIO AUTOMÁTICO
 // ============================================================
 function ativarPlayer() {
   console.log("🎬 Ativando player automaticamente...");
@@ -241,7 +284,97 @@ function voltarTelaInicial() {
 }
 
 // ============================================================
-// 6. FULLSCREEN E CONTROLES - CORRIGIDO
+// 6.5. OVERLAY "TOQUE PARA INICIAR" + F11 AUTOMÁTICO POR GESTO
+// ============================================================
+function mostrarPromptIniciar() {
+  if (document.getElementById("iniciarOverlay")) return;
+  var overlay = document.createElement("div");
+  overlay.id = "iniciarOverlay";
+  overlay.className = "start-overlay";
+  overlay.innerHTML =
+    '<div class="start-overlay-inner">' +
+    '<div class="start-icon">📺</div>' +
+    '<div class="start-title">TV Manager</div>' +
+    '<div class="start-text">Toque ou clique para iniciar em ecrã cheio</div>' +
+    "</div>";
+  document.body.appendChild(overlay);
+}
+
+function removerPromptIniciar() {
+  var overlay = document.getElementById("iniciarOverlay");
+  if (overlay) overlay.remove();
+}
+
+function tentarEntrarFullscreenEl(el) {
+  try {
+    if (el.requestFullscreen) {
+      return el.requestFullscreen({ navigationUI: "hide" });
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    } else if (el.mozRequestFullScreen) {
+      el.mozRequestFullScreen();
+    } else if (el.msRequestFullscreen) {
+      el.msRequestFullscreen();
+    }
+  } catch (e) {
+    console.warn("⚠️ Erro a pedir fullscreen:", e);
+  }
+  return null;
+}
+
+function iniciarPorClique() {
+  // Torna-se idempotente: o utilizador pode clicar várias vezes (e.g.
+  // depois de sair com Esc). Apenas saltamos se já estamos efetivamente
+  // em fullscreen — caso contrário pedimos novamente e deixamos remover
+  // o overlay.
+  var jaFullscreen = !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+  removerPromptIniciar();
+  if (jaFullscreen) {
+    iniciadoPorClique = true;
+    // Garante que o player arranca se a playlist já chegou entretanto.
+    if (itemsPlaylist && itemsPlaylist.length > 0 && !playerAtivo) {
+      ativarPlayer();
+    }
+    return;
+  }
+
+  iniciadoPorClique = true;
+  var el = document.documentElement;
+  var p = tentarEntrarFullscreenEl(el);
+  // Em browsers modernos, requestFullscreen devolve uma Promise que pode
+  // ser rejeitada (e.g. num iframe sem allow="fullscreen"). Tratamos o erro
+  // silenciosamente e continuamos em modo janela, mas o utilizador já
+  // concedeu o gesto, por isso o autoplay subsequente fica desbloqueado.
+  if (p && typeof p.then === "function") {
+    p.then(function () {
+      estaEmFullscreen = true;
+    }).catch(function (err) {
+      console.warn("⚠️ Fullscreen negado pelo browser:", err);
+    });
+  }
+
+  // Se a playlist já tinha chegado antes do clique, arrancar já.
+  if (itemsPlaylist && itemsPlaylist.length > 0 && !playerAtivo) {
+    ativarPlayer();
+  }
+}
+
+function instalarGestoInicial() {
+  if (gestoListenersAdicionados) return;
+  gestoListenersAdicionados = true;
+  var opts = { passive: true };
+  document.addEventListener("click", iniciarPorClique, opts);
+  document.addEventListener("touchstart", iniciarPorClique, opts);
+  document.addEventListener("keydown", iniciarPorClique, opts);
+}
+
+// ============================================================
+// 7. FULLSCREEN AUTOMÁTICO (F11) - SEM CONTROLES
 // ============================================================
 function entrarFullscreen(elemento) {
   var playerContainer = document.getElementById("playerContainer");
@@ -288,50 +421,15 @@ function entrarFullscreen(elemento) {
     tryPlayVideo(video, container);
   }
 
-  var exitBtn = document.getElementById("exitFullscreenBtn");
-  if (!exitBtn) {
-    exitBtn = document.createElement("button");
-    exitBtn.id = "exitFullscreenBtn";
-    exitBtn.className = "exit-fullscreen-btn";
-    exitBtn.innerHTML = '<i class="fas fa-times-circle"></i> Sair';
-    exitBtn.onclick = function () {
-      sairFullscreen();
-      voltarTelaInicial();
-    };
-    container.appendChild(exitBtn);
-  }
-
-  var controls = document.getElementById("fullscreenControls");
-  if (!controls) {
-    controls = document.createElement("div");
-    controls.className = "fullscreen-controls";
-    controls.id = "fullscreenControls";
-    controls.innerHTML = `
-            <button onclick="window.pauseResume()"><i class="fas fa-pause"></i> Pausar</button>
-            <button onclick="window.proximoItem()"><i class="fas fa-forward"></i> Próximo</button>
-        `;
-    container.appendChild(controls);
-  }
-
-  container.addEventListener("mousemove", mostrarControles);
-  container.addEventListener("mouseleave", ocultarControles);
-
+  // O fullscreen já é tratado a nível do documentElement (ver
+  // iniciarPorClique), portanto NÃO pedimos requestFullscreen aqui —
+  // isso causaria uma transição “aninhada” mal suportada pela maioria
+  // dos browsers. Limitamo-nos a registar o container ativo e a
+  // mostrar o conteúdo lá dentro.
   if (!estaEmFullscreen) {
-    var elem = container;
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen({ navigationUI: "hide" }).catch(function () {});
-    } else if (elem.webkitRequestFullscreen) {
-      elem.webkitRequestFullscreen();
-    } else if (elem.msRequestFullscreen) {
-      elem.msRequestFullscreen();
-    } else if (elem.mozRequestFullScreen) {
-      elem.mozRequestFullScreen();
-    }
     estaEmFullscreen = true;
     fullscreenContainer = container;
   }
-
-  mostrarControles();
 }
 
 function tryPlayVideo(video, container, tentativas) {
@@ -422,66 +520,10 @@ function sairFullscreen() {
   }
   estaEmFullscreen = false;
   fullscreenContainer = null;
-  if (temporizadorMouse) {
-    clearTimeout(temporizadorMouse);
-    temporizadorMouse = null;
-  }
 }
-
-function mostrarControles() {
-  var exitBtn = document.getElementById("exitFullscreenBtn");
-  var controls = document.getElementById("fullscreenControls");
-  if (exitBtn) exitBtn.classList.add("visible");
-  if (controls) controls.classList.add("visible");
-  if (temporizadorMouse) clearTimeout(temporizadorMouse);
-  temporizadorMouse = setTimeout(ocultarControles, 4000);
-}
-
-function ocultarControles() {
-  var exitBtn = document.getElementById("exitFullscreenBtn");
-  var controls = document.getElementById("fullscreenControls");
-  if (exitBtn) exitBtn.classList.remove("visible");
-  if (controls) controls.classList.remove("visible");
-  if (temporizadorMouse) {
-    clearTimeout(temporizadorMouse);
-    temporizadorMouse = null;
-  }
-}
-
-window.pauseResume = function () {
-  var container = document.getElementById("fullscreenContainer");
-  if (!container) return;
-  var video = container.querySelector("video");
-  if (video) {
-    if (video.paused) {
-      video.play();
-    } else {
-      video.pause();
-    }
-  }
-  mostrarControles();
-};
-
-window.proximoItem = function () {
-  if (temporizadorAtual) {
-    clearTimeout(temporizadorAtual);
-    temporizadorAtual = null;
-  }
-  if (reprodutorAtivo && itemsPlaylist.length > 0) {
-    if (indiceAtual >= itemsPlaylist.length) indiceAtual = 0;
-    var item = itemsPlaylist[indiceAtual];
-    indiceAtual++;
-    reproduzirItem(item, function () {
-      if (reprodutorAtivo) {
-        avancarLoop();
-      }
-    });
-  }
-  mostrarControles();
-};
 
 // ============================================================
-// 7. REPRODUÇÃO DE ITENS - CORRIGIDO
+// 8. REPRODUÇÃO DE ITENS (com envio de now playing)
 // ============================================================
 function pararReproducao() {
   if (temporizadorAtual) {
@@ -501,6 +543,7 @@ function pararReproducao() {
     v.currentTime = 0;
   });
   reprodutorAtivo = false;
+  enviarNowPlaying(null);
 }
 
 function reproduzirItem(item, onTerminar) {
@@ -558,9 +601,40 @@ function reproduzirItem(item, onTerminar) {
     video.style.objectFit = "contain";
     video.style.background = "#000";
 
+    var duracaoTimerVideo = null;
+    var videoTerminado = false;
+
+    function finalizarVideo() {
+      if (videoTerminado) return;
+      videoTerminado = true;
+      if (duracaoTimerVideo) {
+        clearTimeout(duracaoTimerVideo);
+        duracaoTimerVideo = null;
+      }
+      elementoVideoAtual = null;
+      enviarNowPlaying(null);
+      onTerminar();
+    }
+
     video.onloadedmetadata = function () {
       console.log("📹 Vídeo carregado:", videoUrl);
       entrarFullscreen(video);
+      enviarNowPlaying(item);
+
+      // Se houver uma duração configurada e ela for menor que a duração real
+      // do vídeo, corta a reprodução ao fim desse tempo.
+      var duracaoConfigurada = parseInt(item.duration_seconds, 10);
+      if (duracaoConfigurada && duracaoConfigurada > 0) {
+        var duracaoRealMs = isFinite(video.duration)
+          ? video.duration * 1000
+          : null;
+        if (!duracaoRealMs || duracaoConfigurada * 1000 < duracaoRealMs) {
+          duracaoTimerVideo = setTimeout(
+            finalizarVideo,
+            duracaoConfigurada * 1000,
+          );
+        }
+      }
     };
 
     video.oncanplay = function () {
@@ -570,14 +644,20 @@ function reproduzirItem(item, onTerminar) {
 
     video.onended = function () {
       console.log("⏹️ Vídeo terminou");
-      elementoVideoAtual = null;
-      onTerminar();
+      finalizarVideo();
     };
 
     video.onerror = function (e) {
       console.error("❌ Erro no vídeo:", e);
       console.error("URL do vídeo:", videoUrl);
+      if (videoTerminado) return;
+      videoTerminado = true;
+      if (duracaoTimerVideo) {
+        clearTimeout(duracaoTimerVideo);
+        duracaoTimerVideo = null;
+      }
       elementoVideoAtual = null;
+      enviarNowPlaying(null);
       setTimeout(onTerminar, 2000);
     };
 
@@ -601,10 +681,12 @@ function reproduzirItem(item, onTerminar) {
     img.onload = function () {
       console.log("✅ Imagem carregada");
       entrarFullscreen(img);
+      enviarNowPlaying(item);
     };
 
     img.onerror = function () {
       console.error("❌ Erro ao carregar imagem:", imgUrl);
+      enviarNowPlaying(null);
       onTerminar();
     };
 
@@ -613,6 +695,7 @@ function reproduzirItem(item, onTerminar) {
     var duracao = (item.duration_seconds || 10) * 1000;
     temporizadorAtual = setTimeout(function () {
       temporizadorAtual = null;
+      enviarNowPlaying(null);
       onTerminar();
     }, duracao);
   } else {
@@ -631,7 +714,9 @@ function reproduzirItem(item, onTerminar) {
             max-width: 80%;
         `;
     entrarFullscreen(msgDiv);
+    enviarNowPlaying(item);
     setTimeout(function () {
+      enviarNowPlaying(null);
       onTerminar();
     }, 3000);
   }
@@ -652,6 +737,7 @@ function iniciarReproducao() {
 
   if (!itemsPlaylist || itemsPlaylist.length === 0) {
     console.log("📭 Nenhum item para reproduzir");
+    enviarNowPlaying(null);
     return;
   }
 
@@ -678,7 +764,7 @@ function iniciarReproducao() {
 }
 
 // ============================================================
-// 8. UI
+// 9. UI
 // ============================================================
 function renderizarUI(playlist, statusMensagem) {
   var root = document.getElementById("appRoot");
@@ -702,9 +788,15 @@ function renderizarUI(playlist, statusMensagem) {
             </div>
             ${
               temPlaylist
-                ? `
+                ? iniciadoPorClique
+                  ? `
                 <div class="autoplay-status">
                     <i class="fas fa-spinner fa-spin"></i> A iniciar automaticamente...
+                </div>
+            `
+                  : `
+                <div class="autoplay-status">
+                    <i class="fas fa-hand-pointer"></i> Toque em qualquer ponto do ecrã para iniciar em ecrã cheio
                 </div>
             `
                 : `
@@ -719,17 +811,23 @@ function renderizarUI(playlist, statusMensagem) {
         </div>
     `;
 
-  if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente) {
+  if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente && iniciadoPorClique) {
     iniciadoAutomaticamente = true;
     console.log("🚀 Iniciando reprodução automática em 2 segundos...");
     setTimeout(function () {
       ativarPlayer();
     }, 2000);
+  } else if (temPlaylist && !playerAtivo && !iniciadoAutomaticamente && !iniciadoPorClique) {
+    iniciadoAutomaticamente = true;
+    // Pré-carregamos os itens mas só arrancamos com a reprodução depois
+    // do gesto (clique/tecla) — caso contrário o autoplay seria
+    // bloqueado pelos browsers modernos.
+    console.log("ℹ️ Playlist disponível. Aguardando gesto do utilizador para F11 + autoplay...");
   }
 }
 
 // ============================================================
-// 9. POLLING E INICIALIZAÇÃO
+// 10. POLLING E INICIALIZAÇÃO
 // ============================================================
 async function atualizarPlaylist() {
   console.log("🔄 Atualizando playlist...");
@@ -759,7 +857,7 @@ async function atualizarPlaylist() {
 }
 
 // ============================================================
-// 10. INICIALIZAÇÃO
+// 11. INICIALIZAÇÃO
 // ============================================================
 (async function iniciar() {
   console.log("🚀 Inicializando TV Manager com AUTOPLAY TOTAL...");
@@ -778,33 +876,45 @@ async function atualizarPlaylist() {
 
   await atualizarPlaylist();
 
-  document.addEventListener("fullscreenchange", function () {
-    if (!document.fullscreenElement && estaEmFullscreen) {
-      voltarTelaInicial();
+  // Reação à saída de fullscreen (Esc, alt-tab, etc.): voltar a apresentar
+  // o overlay para que o utilizador re-entre em ecrã cheio com um único
+  // clique, mantendo o resto do comportamento automático na próxima
+  // interação.
+  function reagirMudancaFullscreen() {
+    var emFullscreen = !!(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement
+    );
+    estaEmFullscreen = emFullscreen;
+    if (!emFullscreen) {
+      fullscreenContainer = null;
+      if (iniciadoPorClique) {
+        mostrarPromptIniciar();
+        instalarGestoInicial();
+      }
     }
-  });
-  document.addEventListener("webkitfullscreenchange", function () {
-    if (!document.webkitFullscreenElement && estaEmFullscreen) {
-      voltarTelaInicial();
-    }
-  });
-  document.addEventListener("msfullscreenchange", function () {
-    if (!document.msFullscreenElement && estaEmFullscreen) {
-      voltarTelaInicial();
-    }
-  });
-  document.addEventListener("mozfullscreenchange", function () {
-    if (!document.mozFullScreenElement && estaEmFullscreen) {
-      voltarTelaInicial();
-    }
-  });
+  }
+  document.addEventListener("fullscreenchange", reagirMudancaFullscreen, false);
+  document.addEventListener("webkitfullscreenchange", reagirMudancaFullscreen, false);
+  document.addEventListener("mozfullscreenchange", reagirMudancaFullscreen, false);
+  document.addEventListener("MSFullscreenChange", reagirMudancaFullscreen, false);
 
   if (intervaloPolling) clearInterval(intervaloPolling);
   intervaloPolling = setInterval(atualizarPlaylist, 30000);
 
+  // Os browsers exigem um gesto do utilizador em cada sessão para entrar
+  // em fullscreen, por isso mostramos sempre o overlay no arranque.
+  mostrarPromptIniciar();
+  instalarGestoInicial();
+
   console.log("✅ TV Manager inicializado com sucesso!");
   console.log(
     "🎯 AUTOPLAY TOTAL - Iniciará automaticamente quando a playlist estiver disponível",
+  );
+  console.log(
+    "🖥️ FULLSCREEN AUTOMÁTICO (F11) - Ativado no primeiro clique, mantém-se até sair com Esc",
   );
   console.log("🌐 Compatível com Chrome, Firefox, Edge, Safari e Opera");
 })();
